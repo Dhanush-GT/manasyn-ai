@@ -23,7 +23,20 @@ import {
 } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 import { stripUndefined } from './sanitize';
-import type { ReflectionEntry, UserProfile, WebhookConfig, Milestone, MilestoneStatus, FeedbackEntry, FeedbackCategory } from '../types';
+import type { 
+  ReflectionEntry, 
+  UserProfile, 
+  WebhookConfig, 
+  WebhookDeliveryLog, 
+  Milestone, 
+  MilestoneStatus, 
+  FeedbackEntry, 
+  FeedbackCategory, 
+  FeedbackDiagnostics,
+  SavedInsight, 
+  LocationTag,
+  UserPreferences 
+} from '../types';
 
 const firebaseConfig = {
   apiKey: firebaseConfigJson.apiKey,
@@ -253,7 +266,9 @@ export async function submitFeedback(
   userEmail: string | null,
   userName: string | null,
   message: string,
-  category: FeedbackCategory = 'general'
+  category: FeedbackCategory = 'general',
+  allowContact: boolean = true,
+  diagnostics?: FeedbackDiagnostics | null
 ): Promise<string> {
   if (!userId) throw new Error('Authentication required to submit feedback');
   if (!message.trim()) throw new Error('Feedback message cannot be empty');
@@ -262,10 +277,12 @@ export async function submitFeedback(
   const feedbackDoc: FeedbackEntry = {
     id: feedbackId,
     userId,
-    userEmail: userEmail || null,
-    userName: userName || null,
+    userEmail: allowContact && userEmail ? userEmail : null,
+    userName: allowContact && userName ? userName : null,
+    allowContact,
     message: message.trim(),
     category,
+    diagnostics: diagnostics || null,
     createdAt: new Date().toISOString(),
   };
 
@@ -297,6 +314,178 @@ export async function getFeedbackEntries(): Promise<FeedbackEntry[]> {
     handleFirestoreError(err, OperationType.LIST, 'feedback');
     return [];
   }
+}
+
+/**
+ * Save user preferences to /users/{userId} document
+ */
+export async function saveUserPreferences(
+  userId: string, 
+  preferences: Partial<UserPreferences>
+): Promise<void> {
+  if (!userId) throw new Error('User ID is required to save preferences');
+  const userPath = `users/${userId}`;
+  const cleanPayload = stripUndefined({
+    preferences,
+    updatedAt: new Date().toISOString(),
+  });
+
+  try {
+    const userRef = doc(db, 'users', userId);
+    await setDoc(userRef, cleanPayload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, userPath);
+  }
+}
+
+/**
+ * Get user preferences from /users/{userId}
+ */
+export async function getUserPreferences(userId: string): Promise<UserPreferences | null> {
+  if (!userId) return null;
+  try {
+    const userRef = doc(db, 'users', userId);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return (data.preferences as UserPreferences) || null;
+    }
+    return null;
+  } catch (error) {
+    console.warn('Could not fetch user preferences:', error);
+    return null;
+  }
+}
+
+/**
+ * Subscribe to user preferences from /users/{userId}
+ */
+export function subscribeUserPreferences(
+  userId: string,
+  onData: (prefs: UserPreferences | null) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId) {
+    onData(null);
+    return () => {};
+  }
+
+  const userRef = doc(db, 'users', userId);
+  return onSnapshot(
+    userRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        onData((data.preferences as UserPreferences) || null);
+      } else {
+        onData(null);
+      }
+    },
+    (err) => {
+      console.warn('Preferences subscription notice:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Completely and irreversibly delete all account data for the specified user
+ * Cleans up interactions, milestones, places, insights, webhooks, and the user profile document.
+ */
+export async function deleteUserAccountAndData(userId: string): Promise<void> {
+  if (!userId) throw new Error('User ID is required to delete account data');
+
+  // 1. Delete all reflections / interactions
+  try {
+    const interactionsSnap = await getDocs(collection(db, 'users', userId, 'interactions'));
+    for (const d of interactionsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+  } catch (err) {
+    console.warn('Error clearing reflections during account wipe:', err);
+  }
+
+  // 2. Delete all commitments / milestones
+  try {
+    const milestonesSnap = await getDocs(collection(db, 'users', userId, 'milestones'));
+    for (const d of milestonesSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+  } catch (err) {
+    console.warn('Error clearing commitments during account wipe:', err);
+  }
+
+  // 3. Delete all saved places
+  try {
+    const placesSnap = await getDocs(collection(db, 'users', userId, 'places'));
+    for (const d of placesSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+  } catch (err) {
+    console.warn('Error clearing places during account wipe:', err);
+  }
+
+  // 4. Delete all saved insights
+  try {
+    const insightsSnap = await getDocs(collection(db, 'users', userId, 'insights'));
+    for (const d of insightsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+  } catch (err) {
+    console.warn('Error clearing insights during account wipe:', err);
+  }
+
+  // 5. Delete all webhooks and subcollection delivery logs
+  try {
+    const webhooksSnap = await getDocs(collection(db, 'users', userId, 'webhooks'));
+    for (const d of webhooksSnap.docs) {
+      try {
+        const logsSnap = await getDocs(collection(db, 'users', userId, 'webhooks', d.id, 'logs'));
+        for (const logDoc of logsSnap.docs) {
+          await deleteDoc(logDoc.ref);
+        }
+      } catch {}
+      await deleteDoc(d.ref);
+    }
+  } catch (err) {
+    console.warn('Error clearing webhooks during account wipe:', err);
+  }
+
+  // 6. Delete legacy webhookConfigs
+  try {
+    const configsSnap = await getDocs(collection(db, 'users', userId, 'webhookConfigs'));
+    for (const d of configsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+  } catch (err) {
+    console.warn('Error clearing legacy webhook configs during account wipe:', err);
+  }
+
+  // 7. Delete root user document
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+  } catch (err) {
+    console.warn('Error clearing root user record:', err);
+  }
+
+  // 8. Wipe localStorage keys
+  try {
+    localStorage.removeItem('pref_default_intent');
+    localStorage.removeItem('pref_reflection_tone');
+    localStorage.removeItem('pref_voice_input');
+    localStorage.removeItem('pref_time_format');
+    localStorage.removeItem('pref_reminder_enabled');
+    localStorage.removeItem('pref_reminder_time');
+    localStorage.removeItem('pref_reminder_days');
+    localStorage.removeItem('pref_reminder_timezone');
+    localStorage.removeItem('theme_preference');
+    localStorage.removeItem('theme');
+  } catch (err) {
+    console.warn('Error clearing local cache:', err);
+  }
+
+  // 9. Sign out from Firebase Auth
+  await signOutUser();
 }
 
 /**
@@ -490,6 +679,278 @@ export function subscribeUserMilestones(
     }
   );
 }
+
+/**
+ * Save or update a saved pattern insight for a user
+ * Path: /users/{userId}/insights/{insightId}
+ */
+export async function saveInsight(userId: string, insight: SavedInsight): Promise<void> {
+  if (!userId || !insight.id) throw new Error('User ID and Insight ID are required');
+  const path = `users/${userId}/insights/${insight.id}`;
+  const cleanPayload = stripUndefined({
+    ...insight,
+    userId,
+    savedAt: insight.savedAt || new Date().toISOString(),
+  });
+
+  try {
+    const ref = doc(db, 'users', userId, 'insights', insight.id);
+    await setDoc(ref, cleanPayload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Delete a saved insight for a user
+ */
+export async function deleteInsight(userId: string, insightId: string): Promise<void> {
+  if (!userId || !insightId) return;
+  const path = `users/${userId}/insights/${insightId}`;
+  try {
+    const ref = doc(db, 'users', userId, 'insights', insightId);
+    await deleteDoc(ref);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Subscribe to user's real-time saved insights
+ */
+export function subscribeUserInsights(
+  userId: string,
+  onData: (insights: SavedInsight[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId) {
+    onData([]);
+    return () => {};
+  }
+
+  const path = `users/${userId}/insights`;
+  const ref = collection(db, 'users', userId, 'insights');
+  const q = query(ref, orderBy('savedAt', 'desc'));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list: SavedInsight[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as SavedInsight);
+      });
+      onData(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, path);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Save or update a place in the user's private places collection
+ */
+export async function saveUserPlace(userId: string, place: LocationTag): Promise<void> {
+  if (!userId || !place) return;
+  const placeId = place.id || `place-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const path = `users/${userId}/places/${placeId}`;
+  const cleanPayload = stripUndefined({
+    ...place,
+    id: placeId,
+    taggedAt: place.taggedAt || new Date().toISOString(),
+  });
+
+  try {
+    const ref = doc(db, 'users', userId, 'places', placeId);
+    await setDoc(ref, cleanPayload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Delete a place from the user's private places collection
+ */
+export async function deleteUserPlace(userId: string, placeId: string): Promise<void> {
+  if (!userId || !placeId) return;
+  const path = `users/${userId}/places/${placeId}`;
+  try {
+    const ref = doc(db, 'users', userId, 'places', placeId);
+    await deleteDoc(ref);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Subscribe to user's real-time saved places
+ */
+export function subscribeUserPlaces(
+  userId: string,
+  onData: (places: LocationTag[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId) {
+    onData([]);
+    return () => {};
+  }
+
+  const path = `users/${userId}/places`;
+  const ref = collection(db, 'users', userId, 'places');
+
+  return onSnapshot(
+    ref,
+    (snapshot) => {
+      const list: LocationTag[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as LocationTag);
+      });
+      onData(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, path);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Save or update a webhook integration configuration in the user's private webhooks collection
+ */
+export async function saveUserWebhook(userId: string, webhook: WebhookConfig): Promise<void> {
+  if (!userId || !webhook) return;
+  const webhookId = webhook.id || `wh-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const path = `users/${userId}/webhooks/${webhookId}`;
+
+  // Mask secret if provided to prevent cleartext exposure
+  const maskedSecret = webhook.secret && webhook.secret.trim()
+    ? `••••••••${webhook.secret.trim().slice(-4)}`
+    : webhook.maskedSecret || undefined;
+
+  const cleanPayload = stripUndefined({
+    ...webhook,
+    id: webhookId,
+    userId,
+    maskedSecret,
+    consecutiveFailures: webhook.consecutiveFailures ?? 0,
+    updatedAt: new Date().toISOString(),
+  });
+
+  try {
+    const ref = doc(db, 'users', userId, 'webhooks', webhookId);
+    await setDoc(ref, cleanPayload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Delete a webhook integration from the user's collection
+ */
+export async function deleteUserWebhook(userId: string, webhookId: string): Promise<void> {
+  if (!userId || !webhookId) return;
+  const path = `users/${userId}/webhooks/${webhookId}`;
+  try {
+    const ref = doc(db, 'users', userId, 'webhooks', webhookId);
+    await deleteDoc(ref);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Subscribe to user's configured webhooks
+ */
+export function subscribeUserWebhooks(
+  userId: string,
+  onData: (webhooks: WebhookConfig[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId) {
+    onData([]);
+    return () => {};
+  }
+
+  const path = `users/${userId}/webhooks`;
+  const ref = collection(db, 'users', userId, 'webhooks');
+
+  return onSnapshot(
+    ref,
+    (snapshot) => {
+      const list: WebhookConfig[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as WebhookConfig);
+      });
+      onData(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, path);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Record a delivery log entry for an executed webhook
+ */
+export async function recordWebhookDeliveryLog(
+  userId: string,
+  webhookId: string,
+  log: WebhookDeliveryLog
+): Promise<void> {
+  if (!userId || !webhookId || !log) return;
+  const logId = log.id || `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const path = `users/${userId}/webhooks/${webhookId}/logs/${logId}`;
+  const cleanPayload = stripUndefined({
+    ...log,
+    id: logId,
+    webhookId,
+    timestamp: log.timestamp || new Date().toISOString(),
+  });
+
+  try {
+    const ref = doc(db, 'users', userId, 'webhooks', webhookId, 'logs', logId);
+    await setDoc(ref, cleanPayload);
+  } catch (error) {
+    console.warn('Could not record webhook delivery log in Firestore:', error);
+  }
+}
+
+/**
+ * Subscribe to delivery logs for a specific webhook
+ */
+export function subscribeWebhookLogs(
+  userId: string,
+  webhookId: string,
+  onData: (logs: WebhookDeliveryLog[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId || !webhookId) {
+    onData([]);
+    return () => {};
+  }
+
+  const path = `users/${userId}/webhooks/${webhookId}/logs`;
+  const ref = collection(db, 'users', userId, 'webhooks', webhookId, 'logs');
+  const q = query(ref, orderBy('timestamp', 'desc'));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list: WebhookDeliveryLog[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as WebhookDeliveryLog);
+      });
+      onData(list.slice(0, 30));
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, path);
+      if (onError) onError(err);
+    }
+  );
+}
+
 
 /**
  * Injects relatable demo sessions & commitments tailored for student / creator persona.

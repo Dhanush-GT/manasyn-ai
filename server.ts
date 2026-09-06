@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
@@ -361,16 +362,26 @@ async function generateContentWithFallback(
 function isSafeExternalUrl(urlStr: string): boolean {
   try {
     const parsed = new URL(urlStr);
+    
+    // In production, strictly enforce HTTPS. In development, allow HTTP only if non-loopback.
+    if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+      return false;
+    }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return false;
     }
+
     const hostname = parsed.hostname.toLowerCase();
-    // Block loopback, private ranges, metadata servers
+    
+    // Reject localhost, loopback, private RFC1918 blocks, link-local, cloud metadata, and internal TLDs
     if (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
       hostname === '0.0.0.0' ||
       hostname === '::1' ||
+      hostname === '::' ||
+      hostname.startsWith('127.') ||
+      hostname.startsWith('0.') ||
       hostname.startsWith('10.') ||
       hostname.startsWith('192.168.') ||
       hostname.startsWith('172.16.') ||
@@ -389,16 +400,33 @@ function isSafeExternalUrl(urlStr: string): boolean {
       hostname.startsWith('172.29.') ||
       hostname.startsWith('172.30.') ||
       hostname.startsWith('172.31.') ||
-      hostname === '169.254.169.254' || // GCP / AWS metadata service
+      hostname.startsWith('169.254.') || // Link-local & cloud metadata range
+      hostname === '169.254.169.254' ||   // GCP / AWS / Azure instance metadata
       hostname.endsWith('.internal') ||
-      hostname.endsWith('.local')
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.lan') ||
+      hostname.endsWith('.home') ||
+      hostname.endsWith('.corp')
     ) {
       return false;
     }
+
+    // Do not allow embedding basic auth credentials in URL
+    if (parsed.username || parsed.password) {
+      return false;
+    }
+
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * Generate HMAC-SHA256 signature for outgoing webhook payload
+ */
+function generateHmacSignature(secret: string, rawPayload: string): string {
+  return crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
 }
 
 // Health check endpoint
@@ -572,7 +600,7 @@ Focus: Provide a spacious, reflective mirror to quiet mental noise, sort signal 
 app.post('/api/gemini/synthesize-journey', async (req: Request, res: Response) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const { entries = [], userEmail = '', timeRange = 'all' } = body;
+    const { entries = [], userEmail = '', timeRange = 'last_30_days' } = body;
 
     if (!Array.isArray(entries) || entries.length === 0) {
       return res.status(400).json({
@@ -584,10 +612,11 @@ app.post('/api/gemini/synthesize-journey', async (req: Request, res: Response) =
     const formattedSummaries = entries
       .slice(0, 30) // Bound token context safely
       .map((entry, idx) => {
-        const title = typeof entry.title === 'string' ? entry.title.slice(0, 100) : `Entry ${idx + 1}`;
-        const date = typeof entry.createdAt === 'string' ? entry.createdAt.slice(0, 10) : 'Recent';
-        const tags = Array.isArray(entry.tags) ? entry.tags.join(', ') : 'None';
-        const location = entry.location?.placeName ? ` (Location: ${entry.location.placeName})` : '';
+        const title = typeof entry.title === 'string' && entry.title.trim() ? entry.title.slice(0, 100) : `Reflection ${idx + 1}`;
+        const date = typeof entry.createdAt === 'string' && entry.createdAt.length >= 10 
+          ? new Date(entry.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+          : 'Recent';
+        const tags = Array.isArray(entry.tags) && entry.tags.length > 0 ? entry.tags.join(', ') : '';
         
         let messagesSnippet = '';
         if (Array.isArray(entry.messages) && entry.messages.length > 0) {
@@ -603,43 +632,141 @@ app.post('/api/gemini/synthesize-journey', async (req: Request, res: Response) =
           messagesSnippet = '  (No recorded message turns)';
         }
 
-        return `### Reflection Log ${idx + 1}: ${title} [${date}]${location}\nTags: ${tags}\nDialogue Context:\n${messagesSnippet}`;
+        return `### Reflection Log ${idx + 1}: "${title}" [${date}]${tags ? ` (Tags: ${tags})` : ''}\nDialogue Context:\n${messagesSnippet}`;
       })
       .join('\n\n');
 
-    const systemInstruction = `You are Manasyn, a voice-first Personal Gemini Journal for busy-minded non-journalers.
-Your role is to analyze chronological journal entries and reflection conversations across time to synthesize recurring patterns, key themes, commitments, and progress in the user's personal journey.
+    const systemInstruction = `You are Manasyn, a voice-first Personal Gemini Journal companion for busy-minded non-journalers.
+Your role is to help the user notice recurring themes, changes in perspective, and possible next steps across their selected reflections over time.
 
-Strict Identity Rules:
-- You are Manasyn, a calm, intelligent, personal, trustworthy, reflective, modern, and human AI journal companion.
-- Never introduce yourself as "Aura", "created by Google", or use stiff/robotic language.
-- Adopt a calm, thoughtful, empathetic, and reflective tone.
-- Math & Metric Notation: Never output raw LaTeX math notation (e.g., $\ge 1$ or $< 15\text{ms}$). Always write comparisons and metrics using standard plain text and symbols (e.g., >= 1, < 15ms).
+STRICT TONE & SAFETY GUARDRAILS:
+1. Tentative, Non-Clinical Tone: Always use humble, cautious phrasing (e.g., "You may be noticing...", "A possible theme is...", "In several reflections, you talked about...", "You seemed to shift towards...").
+2. STRICT CLINICAL PROHIBITION: NEVER make psychological diagnoses, clinical assessments, mental health labels (e.g. depression, anxiety disorder, ADHD), personality attributions, or definitive emotional judgments. Treat every pattern as a gentle, observational reflection for the user to validate.
+3. Strict Evidence Requirement: Every recurring theme and change in perspective MUST cite exact supporting reflections from the provided logs, including the exact reflection title and date string.
+4. Output JSON ONLY: Output a valid, clean JSON object matching the following structure without markdown formatting or code blocks outside the JSON:
 
-Structure your synthesis with crisp, high-signal Markdown:
-1. ## ⚡ Executive Strategic Trajectory
-   - High-density distillation of the overarching architectural evolution, cognitive momentum, and founder trajectory.
-2. ## 🔍 Structural Patterns & Operational Bottlenecks
-   - Identify 2-4 core recurring patterns, systemic bottlenecks, decision loops, or high-friction areas.
-3. ## 📍 Spatial & Contextual Telemetry (if locations are tagged)
-   - Strategic breakdown of environmental, geographical, or physical hub patterns where key breakthroughs occurred.
-4. ## 📋 Critical Path & Unresolved Execution Loops
-   - Extract pending technical commitments, architectural debts, open operational loops, and unexecuted decisions.
-5. ## 🎯 High-Leverage Strategic Directives
-   - 3 prioritized, mathematically rigorous directives and counter-intuitive recommendations to accelerate velocity.
+{
+  "recurring_themes": [
+    {
+      "title": "Short descriptive title of the recurring idea or priority",
+      "description": "Gentle, non-clinical summary of how this topic arose and what it means.",
+      "supporting_reflections": [
+        {
+          "title": "Exact Reflection Title",
+          "date": "Exact Date string, e.g. 2 Sep"
+        }
+      ]
+    }
+  ],
+  "changes_in_perspective": [
+    {
+      "title": "Short descriptive title of the shift",
+      "description": "Observation of how thinking, confidence, or priorities evolved between earlier and later reflections.",
+      "supporting_reflections": [
+        {
+          "title": "Exact Reflection Title",
+          "date": "Exact Date string, e.g. 2 Sep"
+        }
+      ]
+    }
+  ],
+  "possible_next_steps": [
+    {
+      "title": "Actionable, gentle suggestion title",
+      "description": "Short explanation of why this step may be helpful based on what the user valued."
+    }
+  ]
+}
 
-Deliver maximum signal density. Use bold key terms and crisp formatting.`;
+Ensure high quality, empathetic insight. Always provide 2-4 items for each category based strictly on the provided reflection dialogue context.`;
 
-    const userPrompt = `Please synthesize and extract longitudinal patterns from my recent journal reflections:\n\n${formattedSummaries}`;
+    const userPrompt = `Please review my selected journal reflections below and identify my recurring themes, changes in perspective, and possible next steps in JSON format:\n\n${formattedSummaries}`;
 
     const { text, modelUsed } = await generateContentWithFallback(userPrompt, systemInstruction);
 
+    // Parse JSON response safely
+    let parsedData: {
+      recurring_themes?: Array<{
+        title?: string;
+        description?: string;
+        supporting_reflections?: Array<{ title?: string; date?: string }>;
+      }>;
+      changes_in_perspective?: Array<{
+        title?: string;
+        description?: string;
+        supporting_reflections?: Array<{ title?: string; date?: string }>;
+      }>;
+      possible_next_steps?: Array<{
+        title?: string;
+        description?: string;
+      }>;
+    } = {};
+
+    try {
+      // Clean possible code fences
+      const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      parsedData = JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.warn('Direct JSON parse failed, attempting regex extraction:', parseErr);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsedData = JSON.parse(jsonMatch[0]);
+        } catch (innerErr) {
+          console.error('Regex JSON parse failed as well:', innerErr);
+        }
+      }
+    }
+
+    // Format and sanitize structured output
+    const recurringThemes = Array.isArray(parsedData.recurring_themes)
+      ? parsedData.recurring_themes.map((t, idx) => ({
+          id: `theme-${Date.now()}-${idx}`,
+          title: typeof t.title === 'string' ? t.title : `Recurring Theme ${idx + 1}`,
+          description: typeof t.description === 'string' ? t.description : '',
+          supporting_reflections: Array.isArray(t.supporting_reflections)
+            ? t.supporting_reflections.map((r) => ({
+                title: typeof r.title === 'string' ? r.title : 'Reflection',
+                date: typeof r.date === 'string' ? r.date : 'Recent',
+              }))
+            : [],
+        }))
+      : [];
+
+    const changesInPerspective = Array.isArray(parsedData.changes_in_perspective)
+      ? parsedData.changes_in_perspective.map((c, idx) => ({
+          id: `perspective-${Date.now()}-${idx}`,
+          title: typeof c.title === 'string' ? c.title : `Perspective Shift ${idx + 1}`,
+          description: typeof c.description === 'string' ? c.description : '',
+          supporting_reflections: Array.isArray(c.supporting_reflections)
+            ? c.supporting_reflections.map((r) => ({
+                title: typeof r.title === 'string' ? r.title : 'Reflection',
+                date: typeof r.date === 'string' ? r.date : 'Recent',
+              }))
+            : [],
+        }))
+      : [];
+
+    const possibleNextSteps = Array.isArray(parsedData.possible_next_steps)
+      ? parsedData.possible_next_steps.map((s, idx) => ({
+          id: `step-${Date.now()}-${idx}`,
+          title: typeof s.title === 'string' ? s.title : `Possible Next Step ${idx + 1}`,
+          description: typeof s.description === 'string' ? s.description : '',
+        }))
+      : [];
+
     recordAuditEvent('JOURNEY_SYNTHESIS_GENERATED', userEmail, 'PATTERN_ENGINE', 'SUCCESS', {
       entriesAnalyzed: entries.length,
+      themesFound: recurringThemes.length,
+      perspectivesFound: changesInPerspective.length,
+      nextStepsFound: possibleNextSteps.length,
       modelUsed,
     });
 
     return res.json({
+      recurring_themes: recurringThemes,
+      changes_in_perspective: changesInPerspective,
+      possible_next_steps: possibleNextSteps,
       synthesis: text,
       modelUsed,
       entriesAnalyzed: entries.length,
@@ -648,7 +775,7 @@ Deliver maximum signal density. Use bold key terms and crisp formatting.`;
   } catch (error: unknown) {
     console.error('Error in /api/gemini/synthesize-journey:', error);
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to generate journey synthesis',
+      error: error instanceof Error ? error.message : 'Failed to generate journey patterns',
     });
   }
 });
@@ -751,9 +878,16 @@ app.post('/api/admin/system-stats', async (req: Request, res: Response) => {
 
 // Webhook Dispatch Test Endpoint
 app.post('/api/webhooks/test-dispatch', async (req: Request, res: Response) => {
+  const startTime = Date.now();
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const { webhookUrl = '', targetType = 'slack', userEmail = '' } = body;
+    const { 
+      webhookUrl = '', 
+      targetType = 'slack', 
+      secret = '', 
+      userEmail = '',
+      webhookId = ''
+    } = body;
 
     if (!webhookUrl || typeof webhookUrl !== 'string') {
       return res.status(400).json({ error: 'Valid webhookUrl is required.' });
@@ -768,65 +902,95 @@ app.post('/api/webhooks/test-dispatch', async (req: Request, res: Response) => {
       });
     }
 
-    // Build payload according to target platform
+    const deliveryId = `del-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const timestampUnix = Math.floor(Date.now() / 1000);
+
+    // Build platform-specific test payload
     let payload: Record<string, unknown> = {};
     if (targetType === 'discord') {
       payload = {
-        content: '⚡ **Manasyn Webhook Test**: Connection successfully established with Manasyn.',
+        content: '⚡ **Manasyn Webhook Connection Test**: Connection successfully established.',
         embeds: [
           {
-            title: 'Manasyn Connected',
-            description: 'Reflections, journey syntheses, and commitments will arrive here securely.',
+            title: 'Manasyn Integration Active',
+            description: 'Reflections and commitments will arrive securely according to your trigger settings.',
             color: 0x6257d9,
             timestamp: new Date().toISOString(),
+            footer: { text: `Delivery ID: ${deliveryId}` }
           },
         ],
       };
     } else if (targetType === 'slack') {
       payload = {
-        text: '⚡ *Manasyn Webhook Test*: Connection successfully established with Manasyn.',
+        text: '⚡ *Manasyn Webhook Connection Test*: Connection successfully established.',
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: '⚡ *Manasyn Webhook Test*\nReflection summaries and commitments will be dispatched to this channel.',
+              text: '⚡ *Manasyn Webhook Connection Test*\nReflection and commitment updates will be delivered here securely.',
             },
           },
         ],
       };
     } else {
       payload = {
-        event: 'manasyn_ping',
-        message: 'Manasyn connection successfully validated.',
+        event: 'test_ping',
+        deliveryId,
+        message: 'Manasyn webhook connection successfully validated.',
         timestamp: new Date().toISOString(),
       };
+    }
+
+    const rawPayloadString = JSON.stringify(payload);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Manasyn-Event': 'test_ping',
+      'X-Manasyn-Delivery': deliveryId,
+      'X-Manasyn-Timestamp': String(timestampUnix),
+    };
+
+    if (secret && typeof secret === 'string' && secret.trim()) {
+      const signature = generateHmacSignature(secret.trim(), rawPayloadString);
+      headers['X-Manasyn-Signature'] = `sha256=${signature}`;
     }
 
     try {
       const response = await fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers,
+        body: rawPayloadString,
         signal: AbortSignal.timeout(6000),
       });
 
+      const durationMs = Date.now() - startTime;
       const success = response.ok;
+
       recordAuditEvent('WEBHOOK_TEST_DISPATCHED', userEmail, 'WEBHOOK_INTEGRATION', success ? 'SUCCESS' : 'ERROR', {
         status: response.status,
         targetType,
+        deliveryId,
+        durationMs,
       });
 
       return res.json({
         success,
         statusCode: response.status,
-        message: success ? 'Webhook responded successfully!' : `Webhook returned HTTP ${response.status}`,
+        deliveryId,
+        durationMs,
+        message: success ? 'Webhook responded successfully!' : `Destination returned HTTP ${response.status}`,
       });
     } catch (fetchErr: unknown) {
+      const durationMs = Date.now() - startTime;
       recordAuditEvent('WEBHOOK_TEST_FAILED', userEmail, 'WEBHOOK_INTEGRATION', 'ERROR', {
         error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+        durationMs,
       });
       return res.status(502).json({
+        success: false,
+        statusCode: 502,
+        deliveryId,
+        durationMs,
         error: `Could not reach webhook endpoint: ${fetchErr instanceof Error ? fetchErr.message : 'Timeout'}`,
       });
     }
@@ -836,18 +1000,31 @@ app.post('/api/webhooks/test-dispatch', async (req: Request, res: Response) => {
   }
 });
 
-// Webhook Summary Dispatch Endpoint
-app.post('/api/webhooks/dispatch-summary', async (req: Request, res: Response) => {
+// Secure Event Webhook Dispatcher with Retries & Exponential Backoff
+app.post(['/api/webhooks/dispatch-event', '/api/webhooks/dispatch-summary'], async (req: Request, res: Response) => {
+  const startTime = Date.now();
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const {
+      webhookId = '',
       webhookUrl = '',
       targetType = 'slack',
-      title = 'Reflection Summary',
-      summary = '',
-      locationName = '',
-      date = new Date().toISOString(),
+      secret = '',
+      eventType = 'manual_only',
+      payloadScope = 'title_only',
+      includeTags = false,
+      includeCommitments = false,
+      includePlaceName = false,
+      includeExactCoordinates = false,
+      userApproved = false,
       userEmail = '',
+      title = 'Reflection',
+      summary = '',
+      messages = [],
+      tags = [],
+      commitments = [],
+      location = null,
+      date = new Date().toISOString(),
     } = body;
 
     if (!webhookUrl || typeof webhookUrl !== 'string') {
@@ -855,76 +1032,183 @@ app.post('/api/webhooks/dispatch-summary', async (req: Request, res: Response) =
     }
 
     if (!isSafeExternalUrl(webhookUrl)) {
+      recordAuditEvent('WEBHOOK_SSRF_BLOCKED', userEmail, 'WEBHOOK_DISPATCHER', 'DENIED', {
+        targetUrl: webhookUrl.slice(0, 40),
+      });
       return res.status(400).json({
-        error: 'Security Error: Webhook URL must be a public HTTPS endpoint.',
+        error: 'Security Error: Webhook URL must be a public HTTPS endpoint and cannot target private infrastructure.',
       });
     }
 
-    let payload: Record<string, unknown> = {};
-    const cleanSummary = typeof summary === 'string' ? summary.slice(0, 2000) : 'Daily Reflection';
-    const locSnippet = locationName ? ` 📍 ${locationName}` : '';
+    const deliveryId = `del-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const timestampUnix = Math.floor(Date.now() / 1000);
+
+    // Filter payload strictly by chosen payloadScope & inclusion flags
+    let payloadData: Record<string, unknown> = {
+      event: eventType,
+      deliveryId,
+      timestamp: date,
+      title: typeof title === 'string' ? title.slice(0, 150) : 'Reflection',
+    };
+
+    if (payloadScope === 'approved_summary' || payloadScope === 'full_reflection') {
+      payloadData.summary = typeof summary === 'string' ? summary.slice(0, 3000) : '';
+    }
+
+    if (payloadScope === 'full_reflection' && userApproved) {
+      payloadData.messages = Array.isArray(messages) ? messages.slice(0, 30).map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content.slice(0, 2000) : '',
+        timestamp: m.timestamp,
+      })) : [];
+    }
+
+    if (includeTags && Array.isArray(tags) && tags.length > 0) {
+      payloadData.tags = tags;
+    }
+
+    if (includeCommitments && Array.isArray(commitments) && commitments.length > 0) {
+      payloadData.commitments = commitments.map((c) => ({
+        title: c.title,
+        status: c.status,
+        category: c.category,
+        targetTimeframe: c.targetTimeframe,
+      }));
+    }
+
+    if (includePlaceName && location && location.placeName) {
+      payloadData.place = {
+        name: location.placeName,
+        category: location.category,
+        address: location.formattedAddress,
+        ...(includeExactCoordinates && typeof location.latitude === 'number' && typeof location.longitude === 'number' ? {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        } : {}),
+      };
+    }
+
+    // Format for platform
+    let outboundPayload: Record<string, unknown> = {};
+    const locSnippet = includePlaceName && location?.placeName ? ` 📍 ${location.placeName}` : '';
 
     if (targetType === 'discord') {
-      payload = {
+      outboundPayload = {
         embeds: [
           {
             title: `⚡ Manasyn: ${title}${locSnippet}`,
-            description: cleanSummary,
+            description: payloadData.summary || `Reflection recorded at ${new Date(date).toLocaleString()}`,
             color: 0x6257d9,
-            footer: { text: `Dispatched at ${date}` },
+            fields: [
+              ...(includeTags && Array.isArray(tags) && tags.length > 0 ? [{ name: 'Tags', value: tags.map(t => `#${t}`).join(' '), inline: true }] : []),
+              ...(includeCommitments && Array.isArray(commitments) && commitments.length > 0 ? [{ name: 'Commitments', value: commitments.map(c => `• ${c.title}`).join('\n').slice(0, 500), inline: false }] : []),
+            ],
+            footer: { text: `Event: ${eventType} | Delivery ID: ${deliveryId}` },
+            timestamp: new Date().toISOString(),
           },
         ],
       };
     } else if (targetType === 'slack') {
-      payload = {
-        text: `*Manasyn Reflection Summary:* ${title}${locSnippet}`,
-        blocks: [
-          {
-            type: 'header',
-            text: {
-              type: 'plain_text',
-              text: `⚡ ${title}${locSnippet}`,
-            },
+      const blocks: any[] = [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: `⚡ ${title}${locSnippet}`,
           },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: cleanSummary,
-            },
+        },
+      ];
+      if (payloadData.summary) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: String(payloadData.summary),
           },
-        ],
+        });
+      }
+      outboundPayload = {
+        text: `*Manasyn Update:* ${title}${locSnippet}`,
+        blocks,
       };
     } else {
-      payload = {
-        event: 'manasyn_summary_export',
-        title,
-        location: locationName || null,
-        summary: cleanSummary,
-        dispatchedAt: date,
-      };
+      outboundPayload = payloadData;
     }
 
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000),
-    });
+    const rawPayloadString = JSON.stringify(outboundPayload);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Manasyn-Event': eventType,
+      'X-Manasyn-Delivery': deliveryId,
+      'X-Manasyn-Timestamp': String(timestampUnix),
+    };
 
-    recordAuditEvent('WEBHOOK_SUMMARY_EXPORTED', userEmail, 'EXPORT_DISPATCH', response.ok ? 'SUCCESS' : 'ERROR', {
-      statusCode: response.status,
-      title: title.slice(0, 30),
+    if (secret && typeof secret === 'string' && secret.trim()) {
+      const signature = generateHmacSignature(secret.trim(), rawPayloadString);
+      headers['X-Manasyn-Signature'] = `sha256=${signature}`;
+    }
+
+    // Retry engine with exponential backoff (max 3 attempts)
+    let lastStatusCode = 0;
+    let lastError = '';
+    let success = false;
+    let attempt = 0;
+
+    for (attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers,
+          body: rawPayloadString,
+          signal: AbortSignal.timeout(6000),
+        });
+
+        lastStatusCode = response.status;
+        if (response.ok) {
+          success = true;
+          break;
+        } else {
+          lastError = `HTTP Status ${response.status}`;
+          // Wait exponential backoff before next attempt
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+          }
+        }
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : 'Network failure';
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+        }
+      }
+    }
+
+    const durationMs = Date.now() - startTime;
+    const shouldAutoPause = !success && attempt >= 3;
+
+    recordAuditEvent('WEBHOOK_EVENT_DISPATCHED', userEmail, 'WEBHOOK_ENGINE', success ? 'SUCCESS' : 'ERROR', {
+      eventType,
+      targetType,
+      statusCode: lastStatusCode,
+      attempts: attempt,
+      success,
+      deliveryId,
+      shouldAutoPause,
     });
 
     return res.json({
-      success: response.ok,
-      statusCode: response.status,
+      success,
+      statusCode: lastStatusCode,
+      deliveryId,
+      attempts: attempt,
+      durationMs,
+      shouldAutoPause,
+      pauseReason: shouldAutoPause ? 'Delivery failed 3 times. Webhook paused for your protection.' : undefined,
+      error: success ? undefined : lastError,
       timestamp: new Date().toISOString(),
     });
   } catch (error: unknown) {
-    console.error('Error in /api/webhooks/dispatch-summary:', error);
-    return res.status(500).json({ error: 'Failed to dispatch reflection summary.' });
+    console.error('Error in webhook dispatch endpoint:', error);
+    return res.status(500).json({ error: 'Internal server error during webhook dispatch.' });
   }
 });
 

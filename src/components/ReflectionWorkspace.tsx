@@ -23,6 +23,7 @@ import {
   Radio,
   Target,
   ArrowRight,
+  ArrowLeft,
   Cpu,
   X
 } from 'lucide-react';
@@ -85,6 +86,7 @@ interface ReflectionWorkspaceProps {
   isSaving?: boolean;
   initialMode?: ReflectionMode;
   onOpenLocations?: (entryId?: string) => void;
+  onBackToReflections?: () => void;
 }
 
 export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
@@ -95,6 +97,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   isSaving = false,
   initialMode,
   onOpenLocations,
+  onBackToReflections,
 }) => {
   const [inputText, setInputText] = useState('');
   const [mode, setMode] = useState<ReflectionMode>(initialMode || 'clear_mind');
@@ -470,7 +473,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   const currentSuggestion = currentSuggestions[suggestionIndex % currentSuggestions.length];
 
   return (
-    <div id="reflection-workspace" className="flex-1 flex flex-col min-h-[calc(100vh-16rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden relative w-full max-w-5xl mx-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+    <div id="reflection-workspace" className="flex-1 w-full flex flex-col min-h-[calc(100vh-14rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden relative">
       {/* Commitment Saved Toast Notification */}
       {milestoneNotification && (
         <div id="milestone-extracted-toast" className="bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-950 border-b border-indigo-500/40 px-4 py-2 flex items-center justify-between text-xs text-indigo-200 shrink-0">
@@ -492,63 +495,79 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
 
       {/* Workspace Header */}
       <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/90 backdrop-blur-md flex items-center justify-between gap-2 sm:gap-3 shrink-0 w-full min-w-0">
-        <div className="flex-1 min-w-0">
-          {isEditingTitle ? (
-            <input
-              id="reflection-title-input"
-              type="text"
-              value={titleText}
-              onChange={(e) => setTitleText(e.target.value)}
-              onBlur={handleTitleSubmit}
-              onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
-              autoFocus
-              className="text-base sm:text-lg font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-lg w-full max-w-md focus:outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-300 dark:border-slate-700"
-            />
-          ) : (
-            <h1
-              id="reflection-title-display"
-              onClick={() => setIsEditingTitle(true)}
-              className="text-base sm:text-lg font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-cyan-400 cursor-pointer flex items-center gap-2 group transition-colors truncate"
-              title="Click to edit title"
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {onBackToReflections && (
+            <button
+              id="workspace-back-to-reflections-btn"
+              type="button"
+              onClick={onBackToReflections}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 flex items-center gap-1 text-xs font-semibold"
+              title="Back to all reflections"
+              aria-label="Back to all reflections"
             >
-              <span className="truncate">{entry.title || 'Untitled Session'}</span>
-              <span className="text-xs text-slate-500 opacity-0 group-hover:opacity-100 font-normal shrink-0">
-                (edit)
-              </span>
-            </h1>
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Reflections</span>
+            </button>
           )}
 
-          {/* Timestamp and optional Attached Location display */}
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {new Date(entry.updatedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-
-            {/* Attached Location Tag (subtle pill) */}
-            {entry.location && (
-              <div className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
-                <span className="truncate max-w-[140px]">{entry.location.placeName}</span>
-                <button
-                  type="button"
-                  onClick={() => handleSelectLocation(undefined)}
-                  className="p-0.5 text-indigo-400 hover:text-rose-500 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors ml-0.5"
-                  title="Remove location tag"
-                  aria-label="Remove location tag"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
+          <div className="flex-1 min-w-0">
+            {isEditingTitle ? (
+              <input
+                id="reflection-title-input"
+                type="text"
+                value={titleText}
+                onChange={(e) => setTitleText(e.target.value)}
+                onBlur={handleTitleSubmit}
+                onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
+                autoFocus
+                className="text-base sm:text-lg font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-lg w-full max-w-md focus:outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-300 dark:border-slate-700"
+              />
+            ) : (
+              <h1
+                id="reflection-title-display"
+                onClick={() => setIsEditingTitle(true)}
+                className="text-base sm:text-lg font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-cyan-400 cursor-pointer flex items-center gap-2 group transition-colors truncate"
+                title="Click to edit title"
+              >
+                <span className="truncate">{entry.title || 'Untitled Session'}</span>
+                <span className="text-xs text-slate-500 opacity-0 group-hover:opacity-100 font-normal shrink-0">
+                  (edit)
+                </span>
+              </h1>
             )}
 
-            {/* Webhook export status */}
-            {entry.webhookExportedAt && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                <CheckCircle2 className="w-3 h-3" />
-                Dispatched
+            {/* Timestamp and optional Attached Location display */}
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {new Date(entry.updatedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
-            )}
+
+              {/* Attached Location Tag (subtle pill) */}
+              {entry.location && (
+                <div className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
+                  <span className="truncate max-w-[140px]">{entry.location.placeName}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLocation(undefined)}
+                    className="p-0.5 text-indigo-400 hover:text-rose-500 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors ml-0.5"
+                    title="Remove location tag"
+                    aria-label="Remove location tag"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Webhook export status */}
+              {entry.webhookExportedAt && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Dispatched
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -652,109 +671,111 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       </div>
 
       {/* Chat / Multi-Turn Reflection Messages Stream */}
-      <div id="messages-container" className="flex-1 overflow-y-auto pb-48 p-4 sm:p-6 space-y-6">
-        {entry.messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-md">
-              <Sparkles className="w-7 h-7" />
+      <div id="messages-container" className="flex-1 overflow-y-auto pb-48 p-4 sm:p-6">
+        <div className="max-w-3xl mx-auto w-full space-y-6">
+          {entry.messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-md">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white font-display">
+                What&apos;s on your mind?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed font-sans max-w-md">
+                Speak or write freely. You don’t need to organize it first.
+              </p>
             </div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white font-display">
-              What&apos;s on your mind?
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed font-sans max-w-md">
-              Speak or write freely. You don’t need to organize it first.
-            </p>
-          </div>
-        ) : (
-          entry.messages.map((msg, index) => {
-            const isUser = msg.role === 'user';
-            return (
-              <div
-                key={msg.id || index}
-                id={`message-bubble-${index}`}
-                className={`flex gap-3 sm:gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
-              >
-                {!isUser && (
-                  <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-1">
-                    <ManasynLogo size={20} variant="symbol" />
-                  </div>
-                )}
-
+          ) : (
+            entry.messages.map((msg, index) => {
+              const isUser = msg.role === 'user';
+              return (
                 <div
-                  className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 text-xs sm:text-sm leading-relaxed shadow-sm min-w-0 break-words ${
-                    isUser
-                      ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-br-xs'
-                      : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-bl-xs border border-slate-200 dark:border-slate-800'
-                  }`}
+                  key={msg.id || index}
+                  id={`message-bubble-${index}`}
+                  className={`flex gap-3 sm:gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  {!isUser && msg.mode && (
-                    <span className="inline-block text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 mb-2 border border-indigo-800/80">
-                      {msg.mode === 'clear_mind' ? 'Clear my mind' :
-                       msg.mode === 'make_decision' ? 'Make a decision' :
-                       msg.mode === 'capture_idea' ? 'Capture an idea' :
-                       msg.mode === 'plan_next_step' ? 'Plan next steps' :
-                       msg.mode.replace('_', ' ')}
-                    </span>
-                  )}
-                  <MarkdownRenderer content={msg.content} isUser={isUser} />
-
-                  {/* Structured Clarity Card */}
-                  {!isUser && msg.clarityCard && (
-                    <ClarityCardView
-                      data={msg.clarityCard}
-                      onConfirmCommitment={() => handleConfirmCommitment(index)}
-                      onDismissCommitment={() => handleDismissCommitment(index)}
-                    />
+                  {!isUser && (
+                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-1">
+                      <ManasynLogo size={20} variant="symbol" />
+                    </div>
                   )}
 
-                  <span
-                    className={`block text-[10px] font-sans mt-2 text-right ${
-                      isUser ? 'text-indigo-100' : 'text-slate-500'
+                  <div
+                    className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 text-xs sm:text-sm leading-relaxed shadow-sm min-w-0 break-words ${
+                      isUser
+                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-br-xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-bl-xs border border-slate-200 dark:border-slate-800'
                     }`}
                   >
-                    {new Date(msg.timestamp).toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit',
-                      hour12: localStorage.getItem('pref_time_format') !== '24h'
-                    })}
-                  </span>
-                </div>
+                    {!isUser && msg.mode && (
+                      <span className="inline-block text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 mb-2 border border-indigo-800/80">
+                        {msg.mode === 'clear_mind' ? 'Clear my mind' :
+                         msg.mode === 'make_decision' ? 'Make a decision' :
+                         msg.mode === 'capture_idea' ? 'Capture an idea' :
+                         msg.mode === 'plan_next_step' ? 'Plan next steps' :
+                         msg.mode.replace('_', ' ')}
+                      </span>
+                    )}
+                    <MarkdownRenderer content={msg.content} isUser={isUser} />
 
-                {isUser && (
-                  <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center shrink-0 shadow-sm mt-1">
-                    <UserIcon className="w-4 h-4" />
+                    {/* Structured Clarity Card */}
+                    {!isUser && msg.clarityCard && (
+                      <ClarityCardView
+                        data={msg.clarityCard}
+                        onConfirmCommitment={() => handleConfirmCommitment(index)}
+                        onDismissCommitment={() => handleDismissCommitment(index)}
+                      />
+                    )}
+
+                    <span
+                      className={`block text-[10px] font-sans mt-2 text-right ${
+                        isUser ? 'text-indigo-100' : 'text-slate-500'
+                      }`}
+                    >
+                      {new Date(msg.timestamp).toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: localStorage.getItem('pref_time_format') !== '24h'
+                      })}
+                    </span>
                   </div>
-                )}
+
+                  {isUser && (
+                    <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center shrink-0 shadow-sm mt-1">
+                      <UserIcon className="w-4 h-4" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {isAiLoading && (
+            <div className="flex gap-3 sm:gap-4 justify-start animate-in fade-in">
+              <div className="w-8 h-8 rounded-xl bg-slate-900 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-sm">
+                <Cpu className="w-4 h-4 animate-spin text-indigo-400" />
               </div>
-            );
-          })
-        )}
-
-        {isAiLoading && (
-          <div className="flex gap-3 sm:gap-4 justify-start animate-in fade-in">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-sm">
-              <Cpu className="w-4 h-4 animate-spin text-indigo-400" />
+              <div className="bg-slate-900 rounded-2xl rounded-bl-xs p-4 border border-slate-800 text-xs sm:text-sm text-slate-400 flex items-center gap-2 font-sans">
+                <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+                <span>Reflecting and structuring your thoughts...</span>
+              </div>
             </div>
-            <div className="bg-slate-900 rounded-2xl rounded-bl-xs p-4 border border-slate-800 text-xs sm:text-sm text-slate-400 flex items-center gap-2 font-sans">
-              <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-              <span>Reflecting and structuring your thoughts...</span>
+          )}
+
+          {errorMessage && (
+            <div className="p-3 bg-rose-950/60 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-center gap-2 font-sans">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
             </div>
-          </div>
-        )}
+          )}
 
-        {errorMessage && (
-          <div className="p-3 bg-rose-950/60 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-center gap-2 font-sans">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        <div ref={chatEndRef} />
+          <div ref={chatEndRef} />
+        </div>
       </div>
 
       {/* Mode Selector and Prompt Input Bar - Fixed to bottom viewport directly above Bottom Navbar */}
-      <div className="fixed bottom-20 inset-x-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-3 pt-2 shadow-lg">
-        <div className="max-w-5xl mx-auto w-full px-3 sm:px-6">
+      <div className="fixed bottom-20 lg:bottom-0 left-0 lg:left-64 right-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-3 pt-2 shadow-lg">
+        <div className="max-w-3xl mx-auto w-full px-3 sm:px-6">
           {/* Reflection Conversational Intent Chips - Swipeable Horizontal Row with mobile overflow safety */}
           <div className="flex flex-row items-center overflow-x-auto touch-pan-x scrollbar-hide w-full gap-2 px-1 sm:px-0 pr-8 mb-2 max-w-full select-none">
             <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 min-w-max self-center mr-0.5 select-none">

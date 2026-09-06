@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Sparkles, 
   ShieldCheck, 
@@ -7,7 +7,11 @@ import {
   CheckCircle2, 
   BrainCircuit,
   Sun,
-  Moon
+  Moon,
+  X,
+  FileText,
+  Download,
+  Mail
 } from 'lucide-react';
 import { ManasynLogo } from './ManasynLogo';
 
@@ -17,7 +21,10 @@ interface LandingViewProps {
   error: string | null;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+  onOpenFeedback: () => void;
 }
+
+type ModalType = 'privacy' | 'terms' | 'data-controls' | null;
 
 export const LandingView: React.FC<LandingViewProps> = ({
   onSignIn,
@@ -25,7 +32,10 @@ export const LandingView: React.FC<LandingViewProps> = ({
   error,
   theme = 'dark',
   onToggleTheme,
+  onOpenFeedback,
 }) => {
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
+
   const scrollToFeatures = () => {
     const el = document.getElementById('core-features-section');
     if (el) {
@@ -156,7 +166,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 Meaningful Patterns
               </h3>
               <p className="text-base text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
-                Notice themes across your reflections, recurring mood patterns, and personal growth over time.
+                Notice recurring themes, changes in perspective, and the progress that matters to you over time.
               </p>
             </div>
 
@@ -188,11 +198,11 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 </h3>
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  Owner-Isolated
+                  Account protected
                 </span>
               </div>
               <p className="text-base text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
-                Owner-scoped access controls help ensure that only you can access your journal.
+                Access controls are designed so each signed-in user can access only their own journal. Selected content may be processed by Gemini to provide AI features.
               </p>
             </div>
           </div>
@@ -251,36 +261,204 @@ export const LandingView: React.FC<LandingViewProps> = ({
 
         <div className="flex flex-wrap items-center justify-center gap-6 pt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
           <button 
+            id="landing-footer-privacy-btn"
             type="button" 
-            onClick={() => console.log('Privacy policy')} 
-            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            onClick={() => setActiveModal('privacy')} 
+            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors font-medium underline-offset-4 hover:underline"
           >
             Privacy
           </button>
           <button 
+            id="landing-footer-terms-btn"
             type="button" 
-            onClick={() => console.log('Terms of service')} 
-            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            onClick={() => setActiveModal('terms')} 
+            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors font-medium underline-offset-4 hover:underline"
           >
             Terms
           </button>
           <button 
+            id="landing-footer-data-controls-btn"
             type="button" 
-            onClick={() => console.log('Data controls')} 
-            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            onClick={() => setActiveModal('data-controls')} 
+            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors font-medium underline-offset-4 hover:underline"
           >
             Data Controls
           </button>
           <button 
+            id="landing-footer-contact-btn"
             type="button" 
-            onClick={() => console.log('Contact')} 
-            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            onClick={onOpenFeedback} 
+            className="hover:text-slate-900 dark:hover:text-slate-200 transition-colors font-medium underline-offset-4 hover:underline"
           >
             Contact
           </button>
         </div>
       </footer>
+
+      {/* Functional Disclosure Modals */}
+      {activeModal && (
+        <div 
+          id={`landing-${activeModal}-modal-backdrop`}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setActiveModal(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div 
+            id={`landing-${activeModal}-modal-card`}
+            className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
+                  {activeModal === 'privacy' && <ShieldCheck className="w-5 h-5" />}
+                  {activeModal === 'terms' && <FileText className="w-5 h-5" />}
+                  {activeModal === 'data-controls' && <Download className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white font-display">
+                    {activeModal === 'privacy' && 'Privacy Disclosure'}
+                    {activeModal === 'terms' && 'Terms of Service'}
+                    {activeModal === 'data-controls' && 'Data Controls & Ownership'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Manasyn Personal Conversational Journal
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="space-y-4 text-sm sm:text-base text-slate-600 dark:text-slate-300 font-sans leading-relaxed">
+              {activeModal === 'privacy' && (
+                <>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      Account-Level Isolation
+                    </p>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                      Access controls are designed so each signed-in user can access only their own journal. Your reflections, commitments, and tags are bound to your verified Google account.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-slate-900 dark:text-white">
+                      AI Processing Boundaries
+                    </h4>
+                    <p className="text-xs sm:text-sm">
+                      Selected content may be processed by Gemini to provide conversational reflections, prompt suggestions, and pattern synthesis. We do not use your private reflections to train third-party public models.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-slate-900 dark:text-white">
+                      Zero Sale of Personal Data
+                    </h4>
+                    <p className="text-xs sm:text-sm">
+                      Manasyn does not monetize user data, display behavioral advertisements, or sell personal reflections to data brokers.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {activeModal === 'terms' && (
+                <>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-slate-900 dark:text-white">
+                      Personal Journaling Platform
+                    </h4>
+                    <p className="text-xs sm:text-sm">
+                      Manasyn is provided as a conversational tool to help you reflect on thoughts, decisions, and goals. You retain full ownership and copyright of all journal entries you author.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 space-y-1 text-xs sm:text-sm">
+                    <p className="font-semibold">Important Health & Safety Notice</p>
+                    <p>
+                      Manasyn is an AI-powered conversational reflection assistant, not a licensed healthcare provider, medical service, or crisis intervention platform. If you are experiencing a mental health emergency, please contact local emergency services or professional crisis support.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-slate-900 dark:text-white">
+                      Acceptable Use
+                    </h4>
+                    <p className="text-xs sm:text-sm">
+                      You agree not to use Manasyn to store unlawful materials, attempt to breach security perimeters, or bypass owner-level access controls.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {activeModal === 'data-controls' && (
+                <>
+                  <p>
+                    You retain total ownership of your journal data. Manasyn gives you complete autonomy over your reflections:
+                  </p>
+
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                      <Download className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-white">Full Data Export</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Export all your conversations, commitments, and metadata in clean JSON or formatted Markdown files at any time from the Export section.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                      <Lock className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-white">Granular & Account Deletion</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Delete individual reflection entries anytime, or permanently erase your entire account and all cloud database records from Profile & Settings.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+              {activeModal === 'data-controls' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveModal(null);
+                    onSignIn();
+                  }}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>Sign in to manage your data</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-semibold transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 

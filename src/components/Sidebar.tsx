@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { 
       id: 'milestones', 
       label: 'Commitments', 
-      desc: 'The next steps you choose to remember', 
+      desc: 'Next steps you chose to save', 
       icon: Target, 
       badge: milestonesCount > 0 ? milestonesCount : undefined 
     },
@@ -60,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { 
       id: 'settings', 
       label: 'Settings', 
-      desc: 'Account, privacy and personalization', 
+      desc: 'Account and reflection preferences', 
       icon: Settings 
     },
   ];
@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeView === item.id;
+          const isActive = activeView === item.id || (item.id === 'reflections' && activeView === 'workspace');
 
           return (
             <button
@@ -152,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {user.displayName || 'Personal Journal'}
             </p>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
-              Signed in with Google
+              Connected with Google
             </p>
           </div>
         </div>

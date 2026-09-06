@@ -55,16 +55,12 @@ export const JourneySynthesisModal: React.FC<JourneySynthesisModalProps> = ({
 
     setIsLoading(true);
     setError(null);
-    setProgressStep('Aggregating isolated Firestore reflections...');
+    setProgressStep('Reviewing selected journal reflections...');
 
     try {
       setTimeout(() => {
-        setProgressStep('Engaging Gemini 3.6 Flash Resilient Ladder...');
+        setProgressStep('Looking across reflections for recurring themes and shifts in perspective...');
       }, 700);
-
-      setTimeout(() => {
-        setProgressStep('Synthesizing cross-entry cognitive patterns & action loops...');
-      }, 1600);
 
       const response = await fetch('/api/gemini/synthesize-journey', {
         method: 'POST',

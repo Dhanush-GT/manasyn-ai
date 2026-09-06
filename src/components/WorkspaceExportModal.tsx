@@ -28,7 +28,7 @@ export const WorkspaceExportModal: React.FC<WorkspaceExportModalProps> = ({
   user,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<'markdown' | 'json'>('markdown');
-  const [includeLocations, setIncludeLocations] = useState(true);
+  const [includeLocations, setIncludeLocations] = useState(false);
   const [includeMetadata, setIncludeMetadata] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [exportedSuccess, setExportedSuccess] = useState(false);
@@ -81,12 +81,9 @@ export const WorkspaceExportModal: React.FC<WorkspaceExportModalProps> = ({
       md += `**Created:** ${createdDate} | **Last Updated:** ${updatedDate}\n\n`;
 
       if (includeLocations && entry.location?.placeName) {
-        md += `📍 **Location Sanctuary:** ${entry.location.placeName}`;
+        md += `📍 **Place:** ${entry.location.placeName}`;
         if (entry.location.formattedAddress) {
           md += ` (${entry.location.formattedAddress})`;
-        }
-        if (typeof entry.location.latitude === 'number' && typeof entry.location.longitude === 'number') {
-          md += ` [${entry.location.latitude.toFixed(4)}°N, ${entry.location.longitude.toFixed(4)}°W]`;
         }
         md += `\n\n`;
       }
@@ -302,28 +299,33 @@ export const WorkspaceExportModal: React.FC<WorkspaceExportModalProps> = ({
             </div>
           </div>
 
-          {/* Options checkboxes */}
-          <div className="space-y-2 pt-2 border-t border-slate-800 text-xs font-mono">
-            <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-              <input
-                type="checkbox"
-                checked={includeLocations}
-                onChange={(e) => setIncludeLocations(e.target.checked)}
-                className="rounded text-cyan-500 focus:ring-cyan-500 bg-slate-800 border-slate-700"
-              />
-              <span>Include tagged geographic locations & coordinates</span>
-            </label>
+            {/* Options checkboxes */}
+            <div className="space-y-2 pt-2 border-t border-slate-800 text-xs">
+              <label className="flex items-start gap-2 cursor-pointer text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={includeLocations}
+                  onChange={(e) => setIncludeLocations(e.target.checked)}
+                  className="mt-0.5 rounded text-indigo-500 focus:ring-indigo-500 bg-slate-800 border-slate-700"
+                />
+                <div>
+                  <span className="font-semibold text-slate-200">Include saved places and location information</span>
+                  <p className="text-[11px] text-amber-300/80 mt-0.5">
+                    This may include sensitive location details linked to your reflections.
+                  </p>
+                </div>
+              </label>
 
-            <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-              <input
-                type="checkbox"
-                checked={includeMetadata}
-                onChange={(e) => setIncludeMetadata(e.target.checked)}
-                className="rounded text-cyan-500 focus:ring-cyan-500 bg-slate-800 border-slate-700"
-              />
-              <span>Include YAML frontmatter metadata & table of contents</span>
-            </label>
-          </div>
+              <label className="flex items-center gap-2 cursor-pointer text-slate-300 pt-1">
+                <input
+                  type="checkbox"
+                  checked={includeMetadata}
+                  onChange={(e) => setIncludeMetadata(e.target.checked)}
+                  className="rounded text-indigo-500 focus:ring-indigo-500 bg-slate-800 border-slate-700"
+                />
+                <span>Include YAML frontmatter metadata & table of contents</span>
+              </label>
+            </div>
 
           {/* Privacy Guarantee Badge */}
           <div className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-400 font-mono">

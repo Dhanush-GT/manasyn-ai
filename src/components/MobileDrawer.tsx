@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   X, 
   Settings, 
@@ -10,7 +10,9 @@ import {
   BookOpen,
   Target,
   Brain,
-  Home
+  Home,
+  MapPin,
+  Download
 } from 'lucide-react';
 import { ManasynLogo } from './ManasynLogo';
 import { UserProfile, AppView } from '../types';
@@ -38,16 +40,78 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   theme,
   onToggleTheme,
 }) => {
-  // Lock body scroll when mobile drawer is open to prevent double scrollbars
+  const [isConfirmingSignOut, setIsConfirmingSignOut] = useState(false);
+  const drawerRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  // Lock body scroll and handle focus trap when mobile drawer is open
   useEffect(() => {
-    if (isOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
+    if (!isOpen) {
+      setIsConfirmingSignOut(false);
+      return;
     }
-  }, [isOpen]);
+
+    // Save current active element to restore focus on close
+    triggerRef.current = (document.activeElement as HTMLElement) || document.getElementById('nav-sidebar-toggle-btn');
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Focus trap setup
+    const focusableSelectors = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    
+    // Initial focus onto close button or first interactive element
+    const timer = setTimeout(() => {
+      if (drawerRef.current) {
+        const focusableElements = drawerRef.current.querySelectorAll<HTMLElement>(focusableSelectors);
+        if (focusableElements.length > 0) {
+          focusableElements[0].focus();
+        }
+      }
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && drawerRef.current) {
+        const focusableElements = drawerRef.current.querySelectorAll<HTMLElement>(focusableSelectors);
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      clearTimeout(timer);
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      // Return focus to menu trigger button
+      if (triggerRef.current) {
+        triggerRef.current.focus();
+      } else {
+        document.getElementById('nav-sidebar-toggle-btn')?.focus();
+      }
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -72,7 +136,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
     { 
       id: 'milestones', 
       label: 'Commitments', 
-      desc: 'The next steps you choose to remember', 
+      desc: 'Next steps you chose to save', 
       icon: Target 
     },
     { 
@@ -82,33 +146,46 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       icon: Brain 
     },
     { 
+      id: 'locations', 
+      label: 'Places', 
+      desc: 'Places connected to your reflections', 
+      icon: MapPin 
+    },
+    { 
+      id: 'export', 
+      label: 'Export Data', 
+      desc: 'Download a copy of your data', 
+      icon: Download 
+    },
+    { 
       id: 'settings', 
-      label: 'Settings', 
-      desc: 'Account, privacy and personalization', 
+      label: 'Profile & Settings', 
+      desc: 'Account and reflection preferences', 
       icon: Settings 
     },
   ];
 
   return (
-    <div id="side-drawer-root">
+    <div id="side-drawer-root" className="relative z-[70]">
       {/* Blurred Backdrop Overlay - auto closes drawer on click */}
       <div 
         id="drawer-backdrop"
         onClick={onClose}
-        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+        className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs animate-in fade-in duration-200 cursor-pointer"
         aria-hidden="true"
       />
 
       {/* Drawer Panel: Primary Calm Navigation & Account */}
       <aside
+        ref={drawerRef}
         id="mobile-side-drawer"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation & Account Menu"
         className="fixed inset-y-0 left-0 z-[70] h-full w-4/5 max-w-sm bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-200 font-sans"
       >
-        {/* Top Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+        {/* Top Header (Non-scrollable) */}
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-950">
           <ManasynLogo size={28} variant="full" />
           <button
             id="close-mobile-drawer-btn"
@@ -122,8 +199,8 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Container */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        {/* Single Scrollable Container with safe bottom padding */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
           
           {/* PRIMARY NAVIGATION ITEMS */}
           <div className="space-y-1.5">
@@ -133,7 +210,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             <div className="space-y-1">
               {primaryNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeView === item.id;
+                const isActive = activeView === item.id || (item.id === 'reflections' && activeView === 'workspace');
                 return (
                   <button
                     key={item.id}
@@ -206,14 +283,15 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 </div>
               </div>
 
-              <div className="pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 font-sans">
-                Signed in with Google
+              <div className="pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80 text-[11px] text-emerald-600 dark:text-emerald-400 font-sans flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Connected with Google</span>
               </div>
             </div>
 
             {/* Secondary Actions */}
             <div className="space-y-1">
-              {/* Send Feedback */}
+              {/* Share Feedback */}
               {onOpenFeedback && (
                 <button
                   id="drawer-nav-feedback-btn"
@@ -229,9 +307,9 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                       <MessageSquarePlus className="w-4 h-4" />
                     </div>
                     <div className="text-left">
-                      <span className="block font-semibold">Send Feedback</span>
+                      <span className="block font-semibold">Share Feedback</span>
                       <p className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                        Share an idea or report a problem
+                        Tell us what's working and what we could improve
                       </p>
                     </div>
                   </div>
@@ -269,20 +347,47 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer: Sign Out */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 shrink-0">
-          <button
-            id="drawer-sign-out-btn"
-            type="button"
-            onClick={() => {
-              onClose();
-              onSignOut();
-            }}
-            className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
+        {/* Footer: De-escalated Sign Out with Lightweight Confirmation */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 shrink-0 pb-6">
+          {isConfirmingSignOut ? (
+            <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2.5 animate-in fade-in duration-150">
+              <p className="text-xs text-slate-700 dark:text-slate-300 font-sans leading-relaxed">
+                Sign out of Manasyn? Your saved reflections will remain in your account.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  id="cancel-drawer-signout-btn"
+                  type="button"
+                  onClick={() => setIsConfirmingSignOut(false)}
+                  className="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-300 dark:border-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="confirm-drawer-signout-btn"
+                  type="button"
+                  onClick={() => {
+                    setIsConfirmingSignOut(false);
+                    onClose();
+                    onSignOut();
+                  }}
+                  className="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-600"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              id="drawer-sign-out-btn"
+              type="button"
+              onClick={() => setIsConfirmingSignOut(true)}
+              className="w-full py-2.5 px-4 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
+          )}
         </div>
       </aside>
     </div>

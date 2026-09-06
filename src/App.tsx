@@ -9,7 +9,7 @@ import {
   saveInteraction, 
   deleteInteraction 
 } from './lib/firebase';
-import type { UserProfile, ReflectionEntry, Milestone, ReflectionMode, AppView } from './types';
+import type { UserProfile, ReflectionEntry, Milestone, ReflectionMode, AppView, ThemeSetting } from './types';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { BottomNavbar } from './components/BottomNavbar';
@@ -25,6 +25,7 @@ import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { FeedbackModal } from './components/FeedbackModal';
 import { LocationsView } from './components/LocationsView';
+import { ReflectionsListView } from './components/ReflectionsListView';
 import { ManasynLogo } from './components/ManasynLogo';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
@@ -46,24 +47,48 @@ export function App() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
-  // Theme State
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
-    return saved || 'dark';
+  // Theme State (supporting light, dark, and system preference)
+  const [themePreference, setThemePreference] = useState<ThemeSetting>(() => {
+    const saved = localStorage.getItem('theme_preference') as ThemeSetting | null;
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    const legacy = localStorage.getItem('theme') as 'dark' | 'light' | null;
+    return legacy || 'dark';
+  });
+
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  const effectiveDark = themePreference === 'system' ? systemPrefersDark : themePreference === 'dark';
+  const theme = effectiveDark ? 'dark' : 'light';
+
+  useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
+    if (effectiveDark) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
+    localStorage.setItem('theme_preference', themePreference);
     localStorage.setItem('theme', theme);
-  }, [theme]);
+  }, [themePreference, effectiveDark, theme]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setThemePreference((prev) => {
+      if (prev === 'dark') return 'light';
+      return 'dark';
+    });
   };
 
   // Subscribe to Auth state
@@ -224,7 +249,7 @@ export function App() {
         setEntries((prev) => prev.map((e) => (e.id === existingEmpty.id ? updated : e)));
       }
       setActiveEntryId(existingEmpty.id);
-      setActiveView('reflections');
+      setActiveView('workspace');
       return;
     }
 
@@ -241,7 +266,7 @@ export function App() {
 
     setEntries((prev) => [newEntry, ...prev]);
     setActiveEntryId(newEntry.id);
-    setActiveView('reflections');
+    setActiveView('workspace');
     setSyncStatus('synced');
   }, [user?.uid, entries]);
 
@@ -254,7 +279,7 @@ export function App() {
     );
     if (existingEmpty) {
       setActiveEntryId(existingEmpty.id);
-      setActiveView('reflections');
+      setActiveView('workspace');
       return;
     }
 
@@ -272,7 +297,7 @@ export function App() {
     // Keep newly initialized reflection in local memory; do not persist empty document to database
     setEntries((prev) => [newEntry, ...prev]);
     setActiveEntryId(newEntry.id);
-    setActiveView('reflections');
+    setActiveView('workspace');
     setSyncStatus('synced');
   }, [user?.uid, entries]);
 
@@ -346,13 +371,22 @@ export function App() {
 
   if (!user) {
     return (
-      <LandingView
-        onSignIn={handleSignIn}
-        isLoading={isAuthLoading}
-        error={authError}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <>
+        <LandingView
+          onSignIn={handleSignIn}
+          isLoading={isAuthLoading}
+          error={authError}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onOpenFeedback={() => setIsFeedbackModalOpen(true)}
+        />
+        <FeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+          user={user}
+          onSignIn={handleSignIn}
+        />
+      </>
     );
   }
 
@@ -403,7 +437,7 @@ export function App() {
       )}
 
       {/* Main App Workspace with Responsive Left Margin for Desktop Sidebar */}
-      <main id="main-content" className="flex-1 w-full max-w-7xl mx-auto min-w-0 pt-20 pb-24 lg:pb-12 min-h-screen px-3 sm:px-6 lg:pl-68">
+      <main id="main-content" className="flex-1 w-full min-w-0 pt-20 pb-24 lg:pb-12 min-h-screen px-3 sm:px-6 lg:pl-64">
         {activeView === 'dashboard' ? (
           <DashboardView
             user={user}
@@ -411,7 +445,7 @@ export function App() {
             milestones={milestones}
             onSelectEntry={(id) => {
               setActiveEntryId(id);
-              handleViewChange('reflections');
+              handleViewChange('workspace');
             }}
             onQuickStartWithIntent={(intent, defaultTitle) => {
               handleQuickStartWithIntent(intent, defaultTitle);
@@ -422,6 +456,18 @@ export function App() {
             onInjectDemoData={handleInjectDemoSandbox}
           />
         ) : activeView === 'reflections' ? (
+          <ReflectionsListView
+            entries={entries}
+            onSelectEntry={(id) => {
+              setActiveEntryId(id);
+              handleViewChange('workspace');
+            }}
+            onNewEntry={handleCreateNewEntry}
+            onDeleteEntry={handleDeleteEntry}
+            onUpdateEntry={handleUpdateEntry}
+            user={user}
+          />
+        ) : activeView === 'workspace' ? (
           <ReflectionWorkspace
             entry={activeEntry}
             user={user}
@@ -430,6 +476,7 @@ export function App() {
             isSaving={syncStatus === 'syncing'}
             initialMode={workspaceIntent}
             onOpenLocations={() => handleViewChange('locations')}
+            onBackToReflections={() => handleViewChange('reflections')}
           />
         ) : activeView === 'milestones' ? (
           <MilestonesTrackerView
@@ -438,7 +485,7 @@ export function App() {
             entries={entries}
             onSelectEntry={(entryId) => {
               setActiveEntryId(entryId);
-              handleViewChange('reflections');
+              handleViewChange('workspace');
             }}
             onOpenNewSession={handleCreateNewEntry}
             onInjectDemoData={handleInjectDemoSandbox}
@@ -449,7 +496,7 @@ export function App() {
             user={user}
             onSelectEntry={(entryId) => {
               setActiveEntryId(entryId);
-              handleViewChange('reflections');
+              handleViewChange('workspace');
             }}
             onNewReflection={handleCreateNewEntry}
             onBackToDashboard={() => handleViewChange('dashboard')}
@@ -464,8 +511,8 @@ export function App() {
         ) : activeView === 'settings' ? (
           <SettingsView
             user={user}
-            theme={theme}
-            onToggleTheme={toggleTheme}
+            themePreference={themePreference}
+            onSelectTheme={setThemePreference}
             onBackToJournal={() => handleViewChange('dashboard')}
             onSignOut={handleSignOut}
             onOpenExport={() => handleViewChange('export')}
@@ -483,7 +530,7 @@ export function App() {
             activeEntry={activeEntry}
             onSelectEntry={(entryId) => {
               setActiveEntryId(entryId);
-              handleViewChange('reflections');
+              handleViewChange('workspace');
             }}
             onUpdateEntry={handleUpdateEntry}
             onNewReflectionAtPlace={(place) => {
@@ -495,16 +542,16 @@ export function App() {
                 updatedAt: new Date().toISOString(),
                 location: place,
                 messages: [],
-                tags: ['sanctuary', 'spatial'],
+                tags: ['place'],
                 isPinned: true,
               };
               handleUpdateEntry(newEntry);
               setActiveEntryId(newEntry.id);
-              handleViewChange('reflections');
+              handleViewChange('workspace');
             }}
             onOpenReflectionWorkspace={(entryId) => {
               if (entryId) setActiveEntryId(entryId);
-              handleViewChange('reflections');
+              handleViewChange('workspace');
             }}
             user={user}
           />

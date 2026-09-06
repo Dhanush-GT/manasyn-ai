@@ -3,9 +3,7 @@ import {
   APIProvider, 
   Map, 
   Marker, 
-  InfoWindow, 
-  useApiLoadingStatus, 
-  APILoadingStatus 
+  InfoWindow 
 } from '@vis.gl/react-google-maps';
 import { 
   MapPin, 
@@ -16,23 +14,32 @@ import {
   ArrowRight, 
   Sparkles, 
   Navigation, 
-  Layers, 
   Building2, 
   Coffee, 
   Home, 
   Trees, 
-  Laptop,
-  Globe2,
-  Trash2,
-  Bookmark,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  ShieldCheck,
-  AlertTriangle
+  BookOpen,
+  Trash2, 
+  ZoomIn, 
+  ZoomOut, 
+  RotateCcw, 
+  ShieldCheck, 
+  AlertTriangle,
+  LocateFixed,
+  Map as MapIcon,
+  List,
+  X,
+  Layers,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import type { ReflectionEntry, UserProfile, LocationTag } from '../types';
 import { isValidGoogleMapsKey, GMP_ATTRIBUTION_ID } from '../lib/maps';
+import { 
+  saveUserPlace, 
+  deleteUserPlace, 
+  subscribeUserPlaces 
+} from '../lib/firebase';
 
 interface LocationsViewProps {
   entries: ReflectionEntry[];
@@ -44,71 +51,116 @@ interface LocationsViewProps {
   user?: UserProfile;
 }
 
-// Curated Sanctuaries & Focus Spaces
-export const PRESET_SANCTUARIES: LocationTag[] = [
+// Curated default places tailored for calm reflection
+export const DEFAULT_PRESET_PLACES: LocationTag[] = [
   {
-    placeName: 'Home Studio Sanctuary',
+    id: 'preset-home-writing',
+    placeName: 'Home Writing Corner',
+    formattedAddress: 'San Francisco, CA',
     latitude: 37.7749,
     longitude: -122.4194,
+    category: 'home',
+    precision: 'approximate',
+    notes: 'Morning desk with natural light by the window',
   },
   {
-    placeName: 'Downtown Focus & Coffee Lab',
-    latitude: 37.7885,
-    longitude: -122.4072,
-  },
-  {
-    placeName: 'Quiet Park & Botanical Garden',
+    id: 'preset-riverside-walk',
+    placeName: 'Riverside Walking Path',
+    formattedAddress: 'Golden Gate Park, San Francisco, CA',
     latitude: 37.7694,
     longitude: -122.4862,
+    category: 'nature',
+    precision: 'neighborhood',
+    notes: 'Quiet path under the trees for walking reflections',
   },
   {
-    placeName: 'Innovation Hub & Coworking Space',
+    id: 'preset-library',
+    placeName: 'University Library',
+    formattedAddress: 'Campus Quiet Floor, San Francisco, CA',
+    latitude: 37.7885,
+    longitude: -122.4072,
+    category: 'study',
+    precision: 'exact',
+    notes: 'Dedicated study area for deep focus',
+  },
+  {
+    id: 'preset-quiet-cafe',
+    placeName: 'Quiet Café',
+    formattedAddress: 'SOMA Neighborhood, San Francisco, CA',
     latitude: 37.7909,
     longitude: -122.4013,
+    category: 'cafe',
+    precision: 'approximate',
+    notes: 'Cozy corner table with ambient warmth',
   },
   {
-    placeName: 'Mountain Haven & Retreat',
+    id: 'preset-garden',
+    placeName: 'Community Garden',
+    formattedAddress: 'Mission District, San Francisco, CA',
+    latitude: 37.7550,
+    longitude: -122.4200,
+    category: 'nature',
+    precision: 'neighborhood',
+    notes: 'Open greenspace surrounded by flowers and herbs',
+  },
+  {
+    id: 'preset-weekend-retreat',
+    placeName: 'Weekend Retreat',
+    formattedAddress: 'Lake Tahoe, CA',
     latitude: 39.0968,
     longitude: -120.0324,
-  },
-  {
-    placeName: 'Coastal Pier & Sunset Walk',
-    latitude: 37.8080,
-    longitude: -122.4098,
+    category: 'travel',
+    precision: 'approximate',
+    notes: 'Peaceful cabin surrounded by pines for reset weekends',
   }
 ];
 
-// Helper to get category icon for sanctuaries
-const getSanctuaryIcon = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('coffee') || lower.includes('cafe')) return Coffee;
-  if (lower.includes('studio') || lower.includes('home')) return Home;
-  if (lower.includes('park') || lower.includes('garden')) return Trees;
-  if (lower.includes('hub') || lower.includes('coworking')) return Laptop;
-  if (lower.includes('pier') || lower.includes('coastal')) return Navigation;
+// Helper to get category icon
+export const getCategoryIcon = (category?: string, name?: string) => {
+  const cat = (category || '').toLowerCase();
+  const lowerName = (name || '').toLowerCase();
+  
+  if (cat === 'cafe' || lowerName.includes('cafe') || lowerName.includes('coffee')) return Coffee;
+  if (cat === 'home' || lowerName.includes('home') || lowerName.includes('room') || lowerName.includes('desk')) return Home;
+  if (cat === 'nature' || lowerName.includes('garden') || lowerName.includes('park') || lowerName.includes('path') || lowerName.includes('river')) return Trees;
+  if (cat === 'study' || lowerName.includes('library') || lowerName.includes('campus') || lowerName.includes('study')) return BookOpen;
+  if (cat === 'travel' || lowerName.includes('retreat') || lowerName.includes('cabin') || lowerName.includes('mountain') || lowerName.includes('lake')) return Compass;
   return Building2;
 };
 
+// Helper for human-readable precision label
+export const getPrecisionLabel = (precision?: string): string => {
+  switch (precision) {
+    case 'neighborhood':
+      return 'Neighborhood area';
+    case 'exact':
+      return 'Specific place';
+    case 'approximate':
+    default:
+      return 'Approximate area';
+  }
+};
+
 /**
- * High-fidelity Interactive Spatial Vector Canvas
- * Renders an offline-capable, interactive radar & cartographic grid
- * displaying all sanctuaries and reflection pins with real geographic coordinates.
- * Activated when Google Maps API key is unconfigured or encounters auth failure.
+ * Fallback Interactive Map View
+ * Renders a calm, accessible cartographic canvas displaying your places and reflection pins.
  */
-interface SpatialVectorCanvasProps {
+interface CalmPlacesCanvasProps {
   mappedEntries: ReflectionEntry[];
-  sanctuaries: LocationTag[];
-  selectedLocation: LocationTag | null;
-  onSelectLocation: (loc: LocationTag) => void;
-  onOpenSession: (entryId: string) => void;
+  places: LocationTag[];
+  selectedPlace: LocationTag | null;
+  onSelectPlace: (place: LocationTag) => void;
+  onOpenReflection: (entryId: string) => void;
+  onMapClick?: (lat: number, lng: number) => void;
 }
 
-const SpatialVectorCanvas: React.FC<SpatialVectorCanvasProps> = ({
+const CalmPlacesCanvas: React.FC<CalmPlacesCanvasProps> = ({
   mappedEntries,
-  sanctuaries,
-  selectedLocation,
-  onSelectLocation,
-  onOpenSession,
+  places,
+  selectedPlace,
+  onSelectPlace,
+  onOpenReflection,
+  onMapClick,
 }) => {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -119,12 +171,12 @@ const SpatialVectorCanvas: React.FC<SpatialVectorCanvasProps> = ({
   // Compute dynamic bounding box
   const allCoords = useMemo(() => {
     const coords: { lat: number; lng: number }[] = [];
-    sanctuaries.forEach((s) => coords.push({ lat: s.latitude, lng: s.longitude }));
+    places.forEach((p) => coords.push({ lat: p.latitude, lng: p.longitude }));
     mappedEntries.forEach((e) => {
       if (e.location) coords.push({ lat: e.location.latitude, lng: e.location.longitude });
     });
     return coords;
-  }, [sanctuaries, mappedEntries]);
+  }, [places, mappedEntries]);
 
   const bounds = useMemo(() => {
     if (allCoords.length === 0) {
@@ -137,7 +189,6 @@ const SpatialVectorCanvas: React.FC<SpatialVectorCanvasProps> = ({
       if (c.lng < minLng) minLng = c.lng;
       if (c.lng > maxLng) maxLng = c.lng;
     });
-    // Add safety margins
     const latSpan = Math.max(0.2, maxLat - minLat);
     const lngSpan = Math.max(0.3, maxLng - minLng);
     return {
@@ -148,13 +199,14 @@ const SpatialVectorCanvas: React.FC<SpatialVectorCanvasProps> = ({
     };
   }, [allCoords]);
 
-  // Project lat/lng to SVG Cartesian coordinate system (800 x 500)
+  // Project geographic coordinates to canvas percentages
   const project = (lat: number, lng: number) => {
-    const latNorm = (bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat);
-    const lngNorm = (lng - bounds.minLng) / (bounds.maxLng - bounds.minLng);
-    const x = lngNorm * 700 + 50;
-    const y = latNorm * 380 + 60;
-    return { x, y };
+    const xPct = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100;
+    const yPct = ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * 100;
+    return {
+      x: Math.max(8, Math.min(92, xPct)),
+      y: Math.max(8, Math.min(92, yPct)),
+    };
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -178,49 +230,45 @@ const SpatialVectorCanvas: React.FC<SpatialVectorCanvasProps> = ({
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      id="spatial-vector-canvas-root"
+      id="calm-places-canvas"
+      className="relative w-full h-full min-h-[360px] bg-slate-900 rounded-2xl overflow-hidden select-none cursor-grab active:cursor-grabbing border border-slate-800"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      className="w-full h-full relative overflow-hidden bg-slate-950 select-none cursor-grab active:cursor-grabbing font-sans"
-      style={{
-        backgroundImage: `
-          radial-gradient(circle at center, rgba(99, 102, 241, 0.08) 0%, transparent 75%),
-          linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '100% 100%, 40px 40px, 40px 40px',
-      }}
+      role="region"
+      aria-label="Interactive Map of Your Places"
     >
-      {/* Informative Header Badge */}
-      <div className="absolute top-3 left-3 z-20 flex flex-col gap-1 max-w-[calc(100%-4rem)] sm:max-w-md">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 backdrop-blur-md shadow-lg text-slate-200">
-          <Globe2 className="w-4 h-4 text-indigo-400 shrink-0 animate-pulse" />
-          <span className="text-xs font-bold font-display">Spatial Coordinate Matrix</span>
-          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-            Vector Mode
-          </span>
-        </div>
-        <p className="text-[11px] text-slate-400/90 font-sans pl-1 hidden sm:block">
-          Live coordinate grid active. Live Google Maps satellite tiles activate when a production Google Maps Platform API key is configured.
-        </p>
+      {/* Background Cartographic Subtle Grid */}
+      <div 
+        className="absolute inset-0 opacity-20 pointer-events-none"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle, #6366f1 1px, transparent 1px),
+            linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
+          `,
+          backgroundSize: '32px 32px, 64px 64px, 64px 64px',
+        }}
+      />
+
+      {/* Top Map Header */}
+      <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 shadow-sm">
+        <Compass className="w-4 h-4 text-indigo-400" />
+        <span className="text-xs font-bold text-white">Your Places</span>
+        <span className="text-[10px] text-slate-400 font-sans">
+          ({places.length} saved)
+        </span>
       </div>
 
-      {/* Compass Rose */}
-      <div className="absolute top-3 right-3 z-20 w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-800 backdrop-blur-md flex flex-col items-center justify-center shadow-lg pointer-events-none">
-        <Compass className="w-5 h-5 text-indigo-400" />
-        <span className="text-[9px] font-mono font-bold text-slate-300 leading-none mt-0.5">N</span>
-      </div>
-
-      {/* Interactive Controls Overlay */}
-      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 backdrop-blur-md p-1 rounded-xl shadow-xl">
+      {/* Interactive Map Controls */}
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 shadow-sm">
         <button
           type="button"
           onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.25))}
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Zoom In"
           aria-label="Zoom In"
         >
@@ -228,332 +276,206 @@ const SpatialVectorCanvas: React.FC<SpatialVectorCanvasProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.25))}
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+          onClick={() => setZoomLevel((z) => Math.max(0.75, z - 0.25))}
+          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Zoom Out"
           aria-label="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <div className="w-px h-4 bg-slate-700 mx-0.5" />
         <button
           type="button"
           onClick={resetView}
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1 text-[11px] font-mono font-semibold"
+          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Reset View"
           aria-label="Reset View"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Reset</span>
+          <RotateCcw className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Coordinate Scale Indicator */}
-      <div className="absolute bottom-4 left-4 z-20 hidden sm:flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-900/80 border border-slate-800/80 backdrop-blur-md text-[10px] font-mono text-slate-400 pointer-events-none">
-        <Navigation className="w-3 h-3 text-indigo-400" />
-        <span>Scale: {(zoomLevel * 100).toFixed(0)}%</span>
-        <span>•</span>
-        <span>{allCoords.length} Nodes</span>
+      {/* Transformable Canvas Layer */}
+      <div
+        className="w-full h-full relative transition-transform duration-75 origin-center"
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+        }}
+      >
+        {/* Soft connecting paths between places */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-20">
+          {places.length > 1 && (
+            <polyline
+              points={places
+                .map((p) => {
+                  const { x, y } = project(p.latitude, p.longitude);
+                  return `${x}%,${y}%`;
+                })
+                .join(' ')}
+              fill="none"
+              stroke="#6366f1"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+            />
+          )}
+        </svg>
+
+        {/* Render Saved Places Pins */}
+        {places.map((place, idx) => {
+          const { x, y } = project(place.latitude, place.longitude);
+          const isSelected = selectedPlace?.placeName === place.placeName;
+          const Icon = getCategoryIcon(place.category, place.placeName);
+
+          return (
+            <div
+              key={`canvas-place-${place.id || idx}`}
+              style={{ left: `${x}%`, top: `${y}%` }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 z-10 cursor-pointer group"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectPlace(place);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectPlace(place);
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label={`Select place: ${place.placeName}`}
+            >
+              {/* Pulse ripple for selected place */}
+              {isSelected && (
+                <div className="absolute -inset-2.5 rounded-full bg-indigo-500/30 animate-ping pointer-events-none" />
+              )}
+
+              {/* Pin Icon Bubble */}
+              <div
+                className={`flex items-center justify-center w-8 h-8 rounded-full border shadow-md transition-all ${
+                  isSelected
+                    ? 'bg-indigo-600 border-white text-white scale-125 ring-2 ring-indigo-400'
+                    : 'bg-slate-800 border-slate-600 text-slate-200 group-hover:bg-slate-700 group-hover:border-indigo-400 group-hover:scale-110'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+              </div>
+
+              {/* Place Name Pill Tooltip */}
+              <div
+                className={`absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all pointer-events-none shadow-md ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white font-bold opacity-100 z-30'
+                    : 'bg-slate-900/90 text-slate-300 opacity-80 group-hover:opacity-100'
+                }`}
+              >
+                {place.placeName}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Render Reflection Pins */}
+        {mappedEntries.map((entry) => {
+          if (!entry.location) return null;
+          const { x, y } = project(entry.location.latitude, entry.location.longitude);
+          const isSelected = selectedPlace?.placeName === entry.location.placeName;
+
+          return (
+            <div
+              key={`canvas-entry-${entry.id}`}
+              style={{ left: `${x}%`, top: `${y + 2}%` }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 z-20 cursor-pointer group"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (entry.location) onSelectPlace(entry.location);
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label={`Reflection: ${entry.title}`}
+            >
+              <div
+                className={`w-3.5 h-3.5 rounded-full border shadow-sm transition-transform ${
+                  isSelected
+                    ? 'bg-violet-400 border-white ring-2 ring-violet-400 scale-125'
+                    : 'bg-indigo-400 border-slate-900 group-hover:scale-125'
+                }`}
+              />
+            </div>
+          );
+        })}
       </div>
 
-      {/* SVG Canvas Stage */}
-      <svg
-        className="w-full h-full"
-        viewBox="0 0 800 500"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <defs>
-          <radialGradient id="beaconGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8" />
-            <stop offset="70%" stopColor="#6366f1" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="reflectionGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.9" />
-            <stop offset="70%" stopColor="#06b6d4" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-
-        {/* Dynamic Zoom & Pan Transform Container */}
-        <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoomLevel})`} style={{ transformOrigin: '400px 250px' }}>
-          
-          {/* Cartographic Coordinate Grid Lines */}
-          <line x1="50" y1="120" x2="750" y2="120" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-          <text x="55" y="115" fill="rgba(255,255,255,0.25)" fontSize="10" fontFamily="monospace">
-            {bounds.maxLat.toFixed(2)}° N
-          </text>
-
-          <line x1="50" y1="250" x2="750" y2="250" stroke="rgba(99,102,241,0.15)" strokeDasharray="4 4" />
-          <text x="55" y="245" fill="rgba(99,102,241,0.4)" fontSize="10" fontFamily="monospace">
-            {((bounds.maxLat + bounds.minLat) / 2).toFixed(2)}° N (Center Line)
-          </text>
-
-          <line x1="50" y1="380" x2="750" y2="380" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-          <text x="55" y="375" fill="rgba(255,255,255,0.25)" fontSize="10" fontFamily="monospace">
-            {bounds.minLat.toFixed(2)}° N
-          </text>
-
-          <line x1="200" y1="60" x2="200" y2="440" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-          <text x="205" y="435" fill="rgba(255,255,255,0.25)" fontSize="10" fontFamily="monospace">
-            {bounds.minLng.toFixed(2)}° W
-          </text>
-
-          <line x1="400" y1="60" x2="400" y2="440" stroke="rgba(99,102,241,0.15)" strokeDasharray="4 4" />
-          <text x="405" y="435" fill="rgba(99,102,241,0.4)" fontSize="10" fontFamily="monospace">
-            {((bounds.maxLng + bounds.minLng) / 2).toFixed(2)}° W
-          </text>
-
-          <line x1="600" y1="60" x2="600" y2="440" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-          <text x="605" y="435" fill="rgba(255,255,255,0.25)" fontSize="10" fontFamily="monospace">
-            {bounds.maxLng.toFixed(2)}° W
-          </text>
-
-          {/* Concentric Radar Rings around Selected Sanctuary */}
-          {selectedLocation && (() => {
-            const { x, y } = project(selectedLocation.latitude, selectedLocation.longitude);
-            return (
-              <g className="pointer-events-none">
-                <circle cx={x} cy={y} r="28" fill="url(#beaconGlow)" />
-                <circle cx={x} cy={y} r="45" fill="none" stroke="#6366f1" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
-                <circle cx={x} cy={y} r="70" fill="none" stroke="#6366f1" strokeWidth="0.75" strokeDasharray="6 6" opacity="0.25" />
-              </g>
-            );
-          })()}
-
-          {/* Connecting Constellation Lines between Sanctuaries */}
-          {sanctuaries.map((s, i) => {
-            if (i === 0) return null;
-            const p1 = project(sanctuaries[i - 1].latitude, sanctuaries[i - 1].longitude);
-            const p2 = project(s.latitude, s.longitude);
-            return (
-              <line
-                key={`vector-link-${i}`}
-                x1={p1.x}
-                y1={p1.y}
-                x2={p2.x}
-                y2={p2.y}
-                stroke="rgba(99, 102, 241, 0.12)"
-                strokeWidth="1.5"
-                strokeDasharray="2 4"
-              />
-            );
-          })}
-
-          {/* Preset Sanctuaries Vector Nodes */}
-          {sanctuaries.map((sanctuary, idx) => {
-            const { x, y } = project(sanctuary.latitude, sanctuary.longitude);
-            const isSelected = selectedLocation?.placeName === sanctuary.placeName;
-
-            return (
-              <g
-                key={`canvas-sanctuary-${idx}`}
-                transform={`translate(${x}, ${y})`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectLocation(sanctuary);
-                }}
-                className="cursor-pointer group"
-              >
-                {/* Outer Glow Halo */}
-                <circle
-                  r={isSelected ? "18" : "12"}
-                  fill={isSelected ? "rgba(99, 102, 241, 0.3)" : "rgba(99, 102, 241, 0.1)"}
-                  className="transition-all duration-300"
-                />
-
-                {/* Core Anchor Pin */}
-                <circle
-                  r={isSelected ? "8" : "6"}
-                  fill={isSelected ? "#818cf8" : "#6366f1"}
-                  stroke="#ffffff"
-                  strokeWidth={isSelected ? "2" : "1.5"}
-                  className="transition-all duration-300 shadow-md group-hover:scale-125"
-                />
-
-                {/* Label Box */}
-                <g transform="translate(0, 18)" className="pointer-events-none">
-                  <rect
-                    x="-70"
-                    y="-2"
-                    width="140"
-                    height="18"
-                    rx="6"
-                    fill={isSelected ? "rgba(30, 27, 75, 0.9)" : "rgba(15, 23, 42, 0.85)"}
-                    stroke={isSelected ? "rgba(129, 140, 248, 0.6)" : "rgba(255, 255, 255, 0.15)"}
-                    strokeWidth="1"
-                  />
-                  <text
-                    x="0"
-                    y="10"
-                    textAnchor="middle"
-                    fill={isSelected ? "#e0e7ff" : "#cbd5e1"}
-                    fontSize="9"
-                    fontWeight={isSelected ? "700" : "500"}
-                    fontFamily="sans-serif"
-                  >
-                    {sanctuary.placeName.length > 22
-                      ? sanctuary.placeName.substring(0, 20) + '...'
-                      : sanctuary.placeName}
-                  </text>
-                </g>
-              </g>
-            );
-          })}
-
-          {/* User Reflection Entries Nodes */}
-          {mappedEntries.map((entry) => {
-            if (!entry.location) return null;
-            const { x, y } = project(entry.location.latitude, entry.location.longitude);
-            const isSelected = selectedLocation?.placeName === entry.location.placeName;
-
-            return (
-              <g
-                key={`canvas-entry-${entry.id}`}
-                transform={`translate(${x}, ${y})`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (entry.location) onSelectLocation(entry.location);
-                }}
-                className="cursor-pointer group"
-              >
-                {/* Reflection Diamond Halo */}
-                <polygon
-                  points="0,-14 14,0 0,14 -14,0"
-                  fill={isSelected ? "rgba(6, 182, 212, 0.35)" : "rgba(6, 182, 212, 0.15)"}
-                  className="transition-all duration-300"
-                />
-
-                {/* Core Diamond */}
-                <polygon
-                  points="0,-7 7,0 0,7 -7,0"
-                  fill={isSelected ? "#22d3ee" : "#06b6d4"}
-                  stroke="#ffffff"
-                  strokeWidth="1.5"
-                  className="transition-all duration-300 group-hover:scale-125"
-                />
-
-                {/* Reflection Label */}
-                <g transform="translate(0, -20)" className="pointer-events-none">
-                  <rect
-                    x="-65"
-                    y="-10"
-                    width="130"
-                    height="16"
-                    rx="5"
-                    fill="rgba(8, 51, 68, 0.9)"
-                    stroke="rgba(34, 211, 238, 0.5)"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x="0"
-                    y="1"
-                    textAnchor="middle"
-                    fill="#cffafe"
-                    fontSize="8.5"
-                    fontWeight="600"
-                    fontFamily="sans-serif"
-                  >
-                    {entry.title.length > 18 ? entry.title.substring(0, 16) + '...' : entry.title}
-                  </text>
-                </g>
-              </g>
-            );
-          })}
-        </g>
-      </svg>
+      {/* Subtle bottom note */}
+      <div className="absolute bottom-2 left-3 z-10 text-[10px] text-slate-400 pointer-events-none">
+        Click or tap any place marker to view details
+      </div>
     </div>
   );
 };
 
 /**
- * Standard Google Maps Canvas with Markers
- * Used only when a valid Google Maps Platform API key is available.
+ * Google Maps Integration with markers
  */
-const MapCanvasWithMarkers: React.FC<{
+interface GoogleMapWithMarkersProps {
   mappedEntries: ReflectionEntry[];
-  selectedLocation: LocationTag | null;
-  onSelectLocation: (loc: LocationTag) => void;
+  places: LocationTag[];
+  selectedPlace: LocationTag | null;
+  onSelectPlace: (place: LocationTag) => void;
   center: { lat: number; lng: number };
   zoom: number;
-  onOpenSession: (entryId: string) => void;
+  onOpenReflection: (entryId: string) => void;
   onAuthFailure: () => void;
-}> = ({
+}
+
+const GoogleMapWithMarkers: React.FC<GoogleMapWithMarkersProps> = ({
   mappedEntries,
-  selectedLocation,
-  onSelectLocation,
+  places,
+  selectedPlace,
+  onSelectPlace,
   center,
   zoom,
-  onOpenSession,
+  onOpenReflection,
   onAuthFailure,
 }) => {
-  const status = useApiLoadingStatus();
-
-  useEffect(() => {
-    if (status === APILoadingStatus.AUTH_FAILURE || status === APILoadingStatus.FAILED) {
-      onAuthFailure();
-    }
-  }, [status, onAuthFailure]);
-
-  if (status === APILoadingStatus.LOADING || status === APILoadingStatus.NOT_LOADED) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-slate-900/90 text-slate-100 rounded-2xl relative overflow-hidden font-mono">
-        <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 mb-3 animate-pulse">
-          <Compass className="w-5 h-5 animate-spin" />
-        </div>
-        <p className="text-xs font-semibold text-slate-300">Initializing Interactive Geographic Layer...</p>
-        <span className="text-[10px] text-slate-400 mt-1">Connecting to Google Maps Platform</span>
-      </div>
-    );
-  }
-
   return (
     <Map
-      id="locations-google-map"
+      id="places-google-map"
+      mapId={GMP_ATTRIBUTION_ID}
       defaultCenter={center}
+      center={center}
       defaultZoom={zoom}
       gestureHandling="greedy"
       disableDefaultUI={false}
-      internalUsageAttributionIds={[GMP_ATTRIBUTION_ID]}
-      className="w-full h-full rounded-2xl shadow-inner overflow-hidden"
+      style={{ width: '100%', height: '100%', minHeight: '360px', borderRadius: '1rem' }}
     >
-      {/* Pinned Reflections Markers */}
-      {mappedEntries.map((entry) => {
-        if (!entry.location) return null;
-        return (
-          <Marker
-            key={`marker-entry-${entry.id}`}
-            position={{ lat: entry.location.latitude, lng: entry.location.longitude }}
-            title={entry.title || entry.location.placeName}
-            onClick={() => onSelectLocation(entry.location!)}
-          />
-        );
-      })}
+      {/* Places Markers */}
+      {places.map((place, idx) => (
+        <Marker
+          key={`map-marker-place-${place.id || idx}`}
+          position={{ lat: place.latitude, lng: place.longitude }}
+          title={place.placeName}
+          onClick={() => onSelectPlace(place)}
+        />
+      ))}
 
-      {/* Preset Sanctuaries Markers */}
-      {PRESET_SANCTUARIES.map((sanctuary, idx) => {
-        return (
-          <Marker
-            key={`marker-sanctuary-${idx}`}
-            position={{ lat: sanctuary.latitude, lng: sanctuary.longitude }}
-            title={sanctuary.placeName}
-            onClick={() => onSelectLocation(sanctuary)}
-          />
-        );
-      })}
-
-      {selectedLocation && (
+      {/* Selected Info Window */}
+      {selectedPlace && (
         <InfoWindow
-          position={{ lat: selectedLocation.latitude, lng: selectedLocation.longitude }}
+          position={{ lat: selectedPlace.latitude, lng: selectedPlace.longitude }}
           onCloseClick={() => {}}
         >
           <div className="p-1 max-w-xs text-slate-900 font-sans">
             <h4 className="font-bold text-xs flex items-center gap-1.5 text-indigo-700">
               <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span>{selectedLocation.placeName}</span>
+              <span>{selectedPlace.placeName}</span>
             </h4>
-            <p className="text-[11px] text-slate-600 mt-1 font-mono">
-              {selectedLocation.latitude.toFixed(4)}, {selectedLocation.longitude.toFixed(4)}
+            {selectedPlace.formattedAddress && (
+              <p className="text-[11px] text-slate-600 mt-1">
+                {selectedPlace.formattedAddress}
+              </p>
+            )}
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {getPrecisionLabel(selectedPlace.precision)}
             </p>
           </div>
         </InfoWindow>
@@ -571,29 +493,73 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
   onOpenReflectionWorkspace,
   user,
 }) => {
+  // Navigation & Search State
+  const [activeTab, setActiveTab] = useState<'saved' | 'reflections'>('saved');
   const [searchQuery, setSearchQuery] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [customLat, setCustomLat] = useState('37.7749');
-  const [customLng, setCustomLng] = useState('-122.4194');
-  const [selectedLocation, setSelectedLocation] = useState<LocationTag | null>(
-    activeEntry?.location || PRESET_SANCTUARIES[0]
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [mobileViewMode, setMobileViewMode] = useState<'list' | 'map'>('list');
+
+  // Selected Place
+  const [selectedPlace, setSelectedPlace] = useState<LocationTag | null>(
+    activeEntry?.location || DEFAULT_PRESET_PLACES[0]
   );
+
+  // User saved places state (with Firestore real-time sync + fallback)
+  const [userPlaces, setUserPlaces] = useState<LocationTag[]>(DEFAULT_PRESET_PLACES);
+  const [isAddingPlace, setIsAddingPlace] = useState(false);
+  const [deleteConfirmPlace, setDeleteConfirmPlace] = useState<LocationTag | null>(null);
   const [tagSuccessMessage, setTagSuccessMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'sanctuaries' | 'reflections' | 'custom'>('sanctuaries');
   const [hasMapAuthFailed, setHasMapAuthFailed] = useState(false);
+  const [geolocationLoading, setGeolocationLoading] = useState(false);
+  const [geolocationError, setGeolocationError] = useState<string | null>(null);
 
-  // Retrieve key from environment
+  // New Place Form State
+  const [formName, setFormName] = useState('');
+  const [formCategory, setFormCategory] = useState<'home' | 'nature' | 'work' | 'cafe' | 'study' | 'travel' | 'other'>('home');
+  const [formPrecision, setFormPrecision] = useState<'approximate' | 'neighborhood' | 'exact'>('approximate');
+  const [formAddress, setFormAddress] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+  const [formLat, setFormLat] = useState(37.7749);
+  const [formLng, setFormLng] = useState(-122.4194);
+
+  // Subscribe to user's saved places in Firestore
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const unsubscribe = subscribeUserPlaces(
+      user.uid,
+      (remotePlaces) => {
+        if (remotePlaces && remotePlaces.length > 0) {
+          // Merge presets and remote places uniquely
+          const combined = [...remotePlaces];
+          DEFAULT_PRESET_PLACES.forEach((preset) => {
+            if (!combined.some((p) => p.placeName.toLowerCase() === preset.placeName.toLowerCase())) {
+              combined.push(preset);
+            }
+          });
+          setUserPlaces(combined);
+        } else {
+          setUserPlaces(DEFAULT_PRESET_PLACES);
+        }
+      },
+      (err) => {
+        console.warn('[Places] Falling back to default preset places:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  // Retrieve Google Maps key
   const rawApiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
-
-  // Determine if Google Maps should be activated
   const isKeyValid = useMemo(() => isValidGoogleMapsKey(rawApiKey), [rawApiKey]);
   const shouldRenderGoogleMaps = isKeyValid && !hasMapAuthFailed;
 
-  // Intercept Google Maps runtime auth errors to prevent unhandled InvalidKeyMapError crashes
+  // Intercept Google Maps runtime auth errors
   useEffect(() => {
     const prevAuthFailure = (window as any).gm_authFailure;
     (window as any).gm_authFailure = () => {
-      console.warn('[LocationsView] Google Maps runtime authentication error caught. Switching to Spatial Vector Canvas.');
+      console.warn('[Places] Google Maps runtime authentication error caught. Switching to Calm Places Canvas.');
       setHasMapAuthFailed(true);
       if (typeof prevAuthFailure === 'function') {
         try { prevAuthFailure(); } catch (_) {}
@@ -609,69 +575,159 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
     return entries.filter((e) => e.location && typeof e.location.latitude === 'number');
   }, [entries]);
 
-  // Filtered preset sanctuaries
-  const filteredSanctuaries = useMemo(() => {
-    if (!searchQuery.trim()) return PRESET_SANCTUARIES;
-    const q = searchQuery.toLowerCase();
-    return PRESET_SANCTUARIES.filter((s) => s.placeName.toLowerCase().includes(q));
-  }, [searchQuery]);
+  // Compute linked reflections count for a place
+  const getLinkedReflectionsCount = (placeName: string) => {
+    return entries.filter(
+      (e) => e.location && e.location.placeName.toLowerCase() === placeName.toLowerCase()
+    ).length;
+  };
 
-  // Filtered pinned reflections
+  // Filtered saved places based on search query & category
+  const filteredPlaces = useMemo(() => {
+    return userPlaces.filter((p) => {
+      const matchesSearch =
+        !searchQuery.trim() ||
+        p.placeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.formattedAddress && p.formattedAddress.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (p.notes && p.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesCat =
+        selectedCategory === 'all' ||
+        (p.category || 'other').toLowerCase() === selectedCategory.toLowerCase();
+
+      return matchesSearch && matchesCat;
+    });
+  }, [userPlaces, searchQuery, selectedCategory]);
+
+  // Filtered reflections with locations
   const filteredMappedEntries = useMemo(() => {
     if (!searchQuery.trim()) return mappedEntries;
     const q = searchQuery.toLowerCase();
     return mappedEntries.filter(
       (e) =>
         e.title?.toLowerCase().includes(q) ||
-        e.location?.placeName.toLowerCase().includes(q)
+        e.location?.placeName.toLowerCase().includes(q) ||
+        e.location?.formattedAddress?.toLowerCase().includes(q)
     );
   }, [mappedEntries, searchQuery]);
 
   const mapCenter = useMemo(() => {
-    if (selectedLocation) {
-      return { lat: selectedLocation.latitude, lng: selectedLocation.longitude };
+    if (selectedPlace) {
+      return { lat: selectedPlace.latitude, lng: selectedPlace.longitude };
     }
     if (mappedEntries.length > 0 && mappedEntries[0].location) {
       return { lat: mappedEntries[0].location.latitude, lng: mappedEntries[0].location.longitude };
     }
     return { lat: 37.7749, lng: -122.4194 };
-  }, [selectedLocation, mappedEntries]);
+  }, [selectedPlace, mappedEntries]);
 
-  // Handle assigning chosen location to active reflection
+  // Handle assigning chosen place to active reflection
   const handleAssignToActiveEntry = () => {
-    if (!activeEntry || !selectedLocation) return;
+    if (!activeEntry || !selectedPlace) return;
     const updated: ReflectionEntry = {
       ...activeEntry,
-      location: selectedLocation,
+      location: selectedPlace,
       updatedAt: new Date().toISOString(),
     };
     onUpdateEntry(updated);
-    setTagSuccessMessage(`Tagged "${selectedLocation.placeName}" to session!`);
+    setTagSuccessMessage(`Added "${selectedPlace.placeName}" to your current reflection.`);
+    setTimeout(() => setTagSuccessMessage(null), 3500);
+  };
+
+  // Handle detaching place from active reflection
+  const handleDetachFromActiveEntry = () => {
+    if (!activeEntry) return;
+    const updated: ReflectionEntry = {
+      ...activeEntry,
+      location: undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    onUpdateEntry(updated);
+    setTagSuccessMessage('Place detached from your reflection.');
     setTimeout(() => setTagSuccessMessage(null), 3000);
   };
 
-  // Handle creating custom location
-  const handleAddCustomLocation = (e: React.FormEvent) => {
+  // Browser Geolocation flow
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setGeolocationError('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setGeolocationLoading(true);
+    setGeolocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setFormLat(position.coords.latitude);
+        setFormLng(position.coords.longitude);
+        setFormAddress('Current location');
+        setGeolocationLoading(false);
+      },
+      (error) => {
+        setGeolocationLoading(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          setGeolocationError('Location access was not granted. You can still enter a name or neighborhood.');
+        } else {
+          setGeolocationError('Unable to retrieve your current location.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  // Submit new place
+  const handleSaveNewPlace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customName.trim()) return;
-    const lat = parseFloat(customLat) || 37.7749;
-    const lng = parseFloat(customLng) || -122.4194;
-    const newLoc: LocationTag = {
-      placeName: customName.trim(),
-      latitude: lat,
-      longitude: lng,
+    if (!formName.trim()) return;
+
+    const newPlace: LocationTag = {
+      id: `place-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      placeName: formName.trim(),
+      category: formCategory,
+      precision: formPrecision,
+      formattedAddress: formAddress.trim() || undefined,
+      notes: formNotes.trim() || undefined,
+      latitude: formLat,
+      longitude: formLng,
+      taggedAt: new Date().toISOString(),
     };
-    setSelectedLocation(newLoc);
-    setCustomName('');
+
+    if (user?.uid) {
+      await saveUserPlace(user.uid, newPlace);
+    }
+
+    setUserPlaces((prev) => [newPlace, ...prev]);
+    setSelectedPlace(newPlace);
+    setIsAddingPlace(false);
+    
+    // Reset form
+    setFormName('');
+    setFormAddress('');
+    setFormNotes('');
+    setFormCategory('home');
+    setFormPrecision('approximate');
+  };
+
+  // Delete place
+  const handleDeletePlace = async (place: LocationTag) => {
+    if (user?.uid && place.id && !place.id.startsWith('preset-')) {
+      await deleteUserPlace(user.uid, place.id);
+    }
+    setUserPlaces((prev) => prev.filter((p) => p.placeName !== place.placeName));
+    if (selectedPlace?.placeName === place.placeName) {
+      setSelectedPlace(null);
+    }
+    setDeleteConfirmPlace(null);
   };
 
   return (
     <div 
-      id="locations-full-page-view" 
-      className="flex-1 flex flex-col w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors"
+      id="places-full-page-view" 
+      className="flex-1 flex flex-col w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors pb-28 sm:pb-12"
     >
-      {/* Top Banner */}
-      <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shrink-0">
+      {/* Top Header Banner */}
+      <header className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shrink-0">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs shrink-0">
@@ -680,52 +736,90 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-display">
-                  Locations & Sanctuaries
+                  Places
                 </h1>
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                  {mappedEntries.length} Pinned
+                  {userPlaces.length} Saved
                 </span>
+                {mappedEntries.length > 0 && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                    {mappedEntries.length} Tagged Reflections
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
-                Anchor cognitive clarity and reflections to physical spaces, work sanctuaries, and geographic landmarks.
+                Connect reflections with places that matter to you.
               </p>
             </div>
           </div>
 
-          {/* Contextual Active Reflection Badge / Actions */}
+          {/* Contextual Active Reflection Badge & Primary Actions */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {activeEntry ? (
+            {activeEntry && (
               <div className="flex items-center gap-2 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 px-3 py-1.5 rounded-xl text-xs">
-                <span className="text-slate-500 dark:text-slate-400">Active session:</span>
-                <span className="font-bold text-indigo-700 dark:text-indigo-300 max-w-[150px] truncate">
-                  {activeEntry.title || 'Untitled Session'}
+                <span className="text-slate-500 dark:text-slate-400">Current reflection:</span>
+                <span className="font-bold text-indigo-700 dark:text-indigo-300 max-w-[140px] truncate">
+                  {activeEntry.title || 'Untitled Reflection'}
                 </span>
-                {selectedLocation && (
+                {selectedPlace && (
                   <button
-                    id="tag-location-to-session-btn"
+                    id="add-place-to-current-reflection-btn"
                     type="button"
                     onClick={handleAssignToActiveEntry}
                     className="ml-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] shadow-xs transition-colors"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Tag Selected</span>
+                    <span>Add to current reflection</span>
+                  </button>
+                )}
+                {activeEntry.location && (
+                  <button
+                    type="button"
+                    onClick={handleDetachFromActiveEntry}
+                    title="Remove place from this reflection"
+                    className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-            ) : null}
+            )}
 
-            {selectedLocation && (
+            {selectedPlace && (
               <button
-                id="new-reflection-at-location-btn"
+                id="start-reflection-here-top-btn"
                 type="button"
-                onClick={() => onNewReflectionAtPlace(selectedLocation)}
+                onClick={() => onNewReflectionAtPlace(selectedPlace)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs shadow-sm transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Reflect Here</span>
+                <span>Start a reflection here</span>
               </button>
             )}
+
+            <button
+              id="add-new-place-btn"
+              type="button"
+              onClick={() => setIsAddingPlace(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add a Place</span>
+            </button>
           </div>
+        </div>
+      </header>
+
+      {/* Privacy Notice Banner */}
+      <div 
+        id="places-privacy-notice"
+        className="bg-slate-100/80 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800 px-4 py-2"
+      >
+        <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-sans">
+          <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <span>
+            Manasyn only uses your location when you choose to add it to a reflection. Your location is not tracked continuously.
+          </span>
         </div>
       </div>
 
@@ -744,216 +838,313 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
         </div>
       )}
 
-      {/* Main Responsive Split Grid */}
+      {/* Mobile View Switcher (List-First Architecture) */}
+      <div className="lg:hidden max-w-7xl mx-auto w-full px-4 pt-4">
+        <div className="flex bg-slate-200/80 dark:bg-slate-900 p-1 rounded-xl border border-slate-300 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setMobileViewMode('list')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
+              mobileViewMode === 'list'
+                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <List className="w-3.5 h-3.5" />
+            <span>Places List</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileViewMode('map')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
+              mobileViewMode === 'map'
+                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <MapIcon className="w-3.5 h-3.5" />
+            <span>Map View</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Responsive Split Content Layout */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col lg:flex-row gap-6">
         
-        {/* Left Interactive Map Container */}
-        <div className="w-full lg:w-3/5 h-[420px] lg:h-auto min-h-[400px] flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden relative">
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                {selectedLocation ? selectedLocation.placeName : 'Select a location'}
-              </span>
-            </div>
-            {selectedLocation && (
-              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                {selectedLocation.latitude.toFixed(4)}, {selectedLocation.longitude.toFixed(4)}
-              </span>
-            )}
-          </div>
-
-          <div className="flex-1 w-full h-full relative">
-            {shouldRenderGoogleMaps ? (
-              <APIProvider apiKey={rawApiKey}>
-                <MapCanvasWithMarkers
-                  mappedEntries={mappedEntries}
-                  selectedLocation={selectedLocation}
-                  onSelectLocation={(loc) => setSelectedLocation(loc)}
-                  center={mapCenter}
-                  zoom={12}
-                  onOpenSession={(id) => onOpenReflectionWorkspace(id)}
-                  onAuthFailure={() => setHasMapAuthFailed(true)}
-                />
-              </APIProvider>
-            ) : (
-              <SpatialVectorCanvas
-                mappedEntries={mappedEntries}
-                sanctuaries={PRESET_SANCTUARIES}
-                selectedLocation={selectedLocation}
-                onSelectLocation={(loc) => setSelectedLocation(loc)}
-                onOpenSession={(id) => onOpenReflectionWorkspace(id)}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Right Directory & Tagging Workspace */}
-        <div className="w-full lg:w-2/5 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          
-          {/* Navigation Tabs */}
+        {/* Left Column: Places List Directory (List-First UX) */}
+        <div 
+          className={`w-full lg:w-1/2 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden ${
+            mobileViewMode === 'map' ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
+          {/* Main Navigation Tabs */}
           <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-1.5 gap-1">
             <button
+              id="places-tab-saved"
               type="button"
-              onClick={() => setActiveTab('sanctuaries')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === 'sanctuaries'
+              onClick={() => setActiveTab('saved')}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'saved'
                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              Sanctuaries ({PRESET_SANCTUARIES.length})
+              <Compass className="w-3.5 h-3.5" />
+              <span>Saved Places ({userPlaces.length})</span>
             </button>
             <button
+              id="places-tab-reflections"
               type="button"
               onClick={() => setActiveTab('reflections')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-colors ${
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'reflections'
                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              Pinned ({mappedEntries.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('custom')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === 'custom'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              Custom Pin
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Reflections with Places ({mappedEntries.length})</span>
             </button>
           </div>
 
-          {/* Search Filter */}
-          {activeTab !== 'custom' && (
-            <div className="p-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search locations or reflections..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
+          {/* Search Filter Bar & Category Chips */}
+          <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 space-y-2.5">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={
+                  activeTab === 'saved'
+                    ? 'Search saved places, neighborhoods, notes...'
+                    : 'Search reflections by place or title...'
+                }
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          )}
 
-          {/* Tab Content Lists */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 max-h-[500px]">
-            {activeTab === 'sanctuaries' && (
-              <div className="space-y-2">
-                {filteredSanctuaries.map((sanctuary, idx) => {
-                  const isSelected = selectedLocation?.placeName === sanctuary.placeName;
-                  const Icon = getSanctuaryIcon(sanctuary.placeName);
+            {/* Category Filter Chips for Saved Places */}
+            {activeTab === 'saved' && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'home', label: 'Home' },
+                  { id: 'nature', label: 'Nature' },
+                  { id: 'study', label: 'Study & Library' },
+                  { id: 'cafe', label: 'Café' },
+                  { id: 'travel', label: 'Retreats' },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                      selectedCategory === cat.id
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  return (
-                    <div
-                      key={`sanctuary-${idx}`}
-                      onClick={() => setSelectedLocation(sanctuary)}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 ring-1 ring-indigo-500/20'
-                          : 'bg-slate-50/70 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                      }`}
+          {/* Directory Content List */}
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 max-h-[600px] scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
+            {activeTab === 'saved' && (
+              <div className="space-y-2.5">
+                {filteredPlaces.length === 0 ? (
+                  <div className="text-center py-10 px-4 text-slate-400 text-xs font-sans space-y-2">
+                    <p>No places found matching your search.</p>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingPlace(true)}
+                      className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                            <Icon className="w-3.5 h-3.5" />
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                              {sanctuary.placeName}
-                            </h4>
-                            <p className="text-[10px] text-slate-500 font-mono">
-                              {sanctuary.latitude.toFixed(3)}, {sanctuary.longitude.toFixed(3)}
-                            </p>
-                          </div>
-                        </div>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add a new place</span>
+                    </button>
+                  </div>
+                ) : (
+                  filteredPlaces.map((place, idx) => {
+                    const isSelected = selectedPlace?.placeName === place.placeName;
+                    const Icon = getCategoryIcon(place.category, place.placeName);
+                    const linkedCount = getLinkedReflectionsCount(place.placeName);
 
-                        {isSelected && (
-                          <span className="p-1 rounded-full bg-indigo-600 text-white shrink-0">
-                            <Check className="w-3 h-3" />
-                          </span>
-                        )}
-                      </div>
+                    return (
+                      <div
+                        key={`place-card-${place.id || idx}`}
+                        onClick={() => setSelectedPlace(place)}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 ring-1 ring-indigo-500/20'
+                            : 'bg-slate-50/70 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                        }`}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Select place ${place.placeName}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedPlace(place);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                                  {place.placeName}
+                                </h3>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
+                                  {getPrecisionLabel(place.precision)}
+                                </span>
+                              </div>
 
-                      {/* Action buttons on selected item */}
-                      {isSelected && (
-                        <div className="mt-3 pt-2 border-t border-indigo-100 dark:border-indigo-900/60 flex items-center justify-end gap-2">
-                          {activeEntry && (
+                              {place.formattedAddress && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate font-sans">
+                                  {place.formattedAddress}
+                                </p>
+                              )}
+
+                              {place.notes && (
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 italic font-sans line-clamp-2">
+                                  "{place.notes}"
+                                </p>
+                              )}
+
+                              {linkedCount > 0 && (
+                                <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold mt-1">
+                                  {linkedCount} reflection{linkedCount === 1 ? '' : 's'} linked
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isSelected && (
+                              <span className="p-1 rounded-full bg-indigo-600 text-white shadow-xs">
+                                <Check className="w-3 h-3" />
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleAssignToActiveEntry();
+                                setDeleteConfirmPlace(place);
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800"
+                              title="Delete Place"
+                              aria-label={`Delete place ${place.placeName}`}
                             >
-                              Tag to Current Session
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNewReflectionAtPlace(sanctuary);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] transition-colors"
-                          >
-                            New Reflection Here
-                          </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {/* Action Buttons on Selected Item */}
+                        {isSelected && (
+                          <div className="mt-3 pt-2.5 border-t border-indigo-100 dark:border-indigo-900/60 flex items-center justify-end gap-2 flex-wrap">
+                            {activeEntry && (
+                              <button
+                                id={`tag-btn-${place.id || idx}`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAssignToActiveEntry();
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-colors shadow-xs"
+                              >
+                                Add to current reflection
+                              </button>
+                            )}
+                            <button
+                              id={`start-reflection-btn-${place.id || idx}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNewReflectionAtPlace(place);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white dark:text-slate-100 font-bold text-[11px] transition-colors"
+                            >
+                              Start a reflection here
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             )}
 
             {activeTab === 'reflections' && (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {filteredMappedEntries.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 font-sans text-xs">
-                    No reflections with tagged locations yet.
+                  <div className="text-center py-10 px-4 text-slate-400 text-xs font-sans space-y-2">
+                    <p>No reflections with tagged places yet.</p>
+                    <p className="text-[11px] text-slate-500">
+                      You can attach a place to any reflection to remember where your thoughts took shape.
+                    </p>
                   </div>
                 ) : (
                   filteredMappedEntries.map((entry) => {
-                    const isSelected = selectedLocation?.placeName === entry.location?.placeName;
+                    const isSelected = selectedPlace?.placeName === entry.location?.placeName;
                     return (
                       <div
                         key={entry.id}
                         onClick={() => {
-                          if (entry.location) setSelectedLocation(entry.location);
+                          if (entry.location) setSelectedPlace(entry.location);
                         }}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700'
+                            ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700'
                             : 'bg-slate-50/70 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60'
                         }`}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Reflection: ${entry.title}`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                              {entry.title || 'Untitled Session'}
-                            </h4>
-                            <div className="flex items-center gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium mt-0.5">
-                              <MapPin className="w-3 h-3 shrink-0" />
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                              {entry.title || 'Untitled Reflection'}
+                            </h3>
+                            <div className="flex items-center gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                              <MapPin className="w-3.5 h-3.5 shrink-0" />
                               <span className="truncate">{entry.location?.placeName}</span>
                             </div>
+                            {entry.location?.formattedAddress && (
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                                {entry.location.formattedAddress}
+                              </p>
+                            )}
                           </div>
-                          <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                            {new Date(entry.updatedAt || entry.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          <span className="text-[10px] text-slate-400 shrink-0 font-sans">
+                            {new Date(entry.updatedAt || entry.createdAt).toLocaleDateString([], {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
                           </span>
                         </div>
 
-                        <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
                           <span className="text-[10px] text-slate-400">
                             {entry.messages?.length || 0} messages
                           </span>
@@ -963,9 +1154,9 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
                               e.stopPropagation();
                               onOpenReflectionWorkspace(entry.id);
                             }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                            className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                           >
-                            <span>Open Reflection</span>
+                            <span>View reflection</span>
                             <ArrowRight className="w-3 h-3" />
                           </button>
                         </div>
@@ -975,63 +1166,309 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
                 )}
               </div>
             )}
-
-            {activeTab === 'custom' && (
-              <form onSubmit={handleAddCustomLocation} className="space-y-3 p-1">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Place or Sanctuary Name
-                  </label>
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="e.g. Kyoto Zen Garden or Downtown Studio"
-                    required
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Latitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={customLat}
-                      onChange={(e) => setCustomLat(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Longitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={customLng}
-                      onChange={(e) => setCustomLng(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition-colors mt-2"
-                >
-                  Pin Custom Location
-                </button>
-              </form>
-            )}
           </div>
         </div>
+
+        {/* Right Column: Visual Map (Desktop side-by-side or Mobile toggled) */}
+        <div 
+          className={`w-full lg:w-1/2 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[420px] relative ${
+            mobileViewMode === 'list' ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
+          {/* Top Map Action Bar */}
+          <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[200px]">
+                {selectedPlace ? selectedPlace.placeName : 'Select a place'}
+              </span>
+            </div>
+            {selectedPlace && (
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">
+                {getPrecisionLabel(selectedPlace.precision)}
+              </span>
+            )}
+          </div>
+
+          {/* Map Rendering Viewport */}
+          <div className="flex-1 w-full h-full relative min-h-[380px]">
+            {shouldRenderGoogleMaps ? (
+              <APIProvider apiKey={rawApiKey}>
+                <GoogleMapWithMarkers
+                  mappedEntries={mappedEntries}
+                  places={userPlaces}
+                  selectedPlace={selectedPlace}
+                  onSelectPlace={(p) => setSelectedPlace(p)}
+                  center={mapCenter}
+                  zoom={12}
+                  onOpenReflection={(id) => onOpenReflectionWorkspace(id)}
+                  onAuthFailure={() => setHasMapAuthFailed(true)}
+                />
+              </APIProvider>
+            ) : (
+              <CalmPlacesCanvas
+                mappedEntries={mappedEntries}
+                places={userPlaces}
+                selectedPlace={selectedPlace}
+                onSelectPlace={(p) => setSelectedPlace(p)}
+                onOpenReflection={(id) => onOpenReflectionWorkspace(id)}
+              />
+            )}
+          </div>
+
+          {/* Bottom Context Info on Selected Place */}
+          {selectedPlace && (
+            <div className="p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                  {selectedPlace.placeName}
+                </p>
+                {selectedPlace.formattedAddress && (
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                    {selectedPlace.formattedAddress}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {activeEntry && (
+                  <button
+                    type="button"
+                    onClick={handleAssignToActiveEntry}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-colors"
+                  >
+                    Add to current reflection
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onNewReflectionAtPlace(selectedPlace)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-[11px] transition-colors"
+                >
+                  Start a reflection here
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* "Add a Place" Modal / Form */}
+      {isAddingPlace && (
+        <div 
+          id="add-place-modal-backdrop"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setIsAddingPlace(false)}
+        >
+          <div 
+            id="add-place-modal-card"
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 w-full max-w-md shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Compass className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-base font-bold text-slate-900 dark:text-white font-display">
+                  Add a Place
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddingPlace(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewPlace} className="space-y-3.5">
+              {/* Place Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Place Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="e.g. Sunny Window Bench or Forest Cabin"
+                  required
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
+                />
+              </div>
+
+              {/* Category Picker */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Category
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'home', label: 'Home', icon: Home },
+                    { id: 'nature', label: 'Nature', icon: Trees },
+                    { id: 'study', label: 'Study', icon: BookOpen },
+                    { id: 'cafe', label: 'Café', icon: Coffee },
+                    { id: 'travel', label: 'Retreat', icon: Compass },
+                    { id: 'other', label: 'Other', icon: Building2 },
+                  ].map((cat) => {
+                    const CatIcon = cat.icon;
+                    const isSelected = formCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setFormCategory(cat.id as any)}
+                        className={`flex items-center gap-1.5 p-2 rounded-xl border text-xs font-semibold transition-all ${
+                          isSelected
+                            ? 'bg-indigo-50 dark:bg-indigo-950/70 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500'
+                            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <CatIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Precision Picker */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Location Precision
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'approximate', label: 'Approximate area' },
+                    { id: 'neighborhood', label: 'Neighborhood' },
+                    { id: 'exact', label: 'Specific place' },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setFormPrecision(p.id as any)}
+                      className={`p-2 rounded-xl border text-[11px] font-semibold text-center transition-all ${
+                        formPrecision === p.id
+                          ? 'bg-indigo-50 dark:bg-indigo-950/70 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500'
+                          : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Address / Location Helper with Geolocation Button */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Address or Neighborhood Description
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    disabled={geolocationLoading}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                  >
+                    <LocateFixed className="w-3 h-3" />
+                    <span>{geolocationLoading ? 'Locating...' : 'Use my current location'}</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={formAddress}
+                  onChange={(e) => setFormAddress(e.target.value)}
+                  placeholder="e.g. San Francisco, CA or Lake Tahoe"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
+                />
+                {geolocationError && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                    {geolocationError}
+                  </p>
+                )}
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  rows={2}
+                  placeholder="What makes this space meaningful for your reflections?"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingPlace(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="submit-save-place-btn"
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-sm transition-colors"
+                >
+                  Save Place
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal with Linked Reflections Warning */}
+      {deleteConfirmPlace && (
+        <div 
+          id="delete-place-confirm-modal"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setDeleteConfirmPlace(null)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 w-full max-w-sm shadow-2xl space-y-3 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2.5 text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="w-5 h-5" />
+              <h3 className="text-sm font-bold">Remove Saved Place?</h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-sans">
+              Are you sure you want to remove <span className="font-bold text-slate-900 dark:text-white">"{deleteConfirmPlace.placeName}"</span> from your saved places?
+            </p>
+
+            {getLinkedReflectionsCount(deleteConfirmPlace.placeName) > 0 && (
+              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
+                <span className="font-bold">Note:</span> This place is linked to {getLinkedReflectionsCount(deleteConfirmPlace.placeName)} existing reflection{getLinkedReflectionsCount(deleteConfirmPlace.placeName) === 1 ? '' : 's'}. Removing it will keep your existing reflections intact.
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmPlace(null)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                id="confirm-delete-place-btn"
+                type="button"
+                onClick={() => handleDeletePlace(deleteConfirmPlace)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-xs transition-colors"
+              >
+                Remove Place
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

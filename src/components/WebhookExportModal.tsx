@@ -95,9 +95,15 @@ export const WebhookExportModal: React.FC<WebhookExportModalProps> = ({
     const newConfig: WebhookConfig = {
       id: `wh-${Date.now()}`,
       userId: user.uid,
+      name: `${targetType.toUpperCase()} Webhook`,
       targetType,
       webhookUrl: webhookUrl.trim(),
       isEnabled: true,
+      triggerEvents: ['manual_only'],
+      payloadScope: 'title_only',
+      includeTags: false,
+      includeCommitments: false,
+      includePlaceName: false,
       createdAt: new Date().toISOString(),
     };
 
