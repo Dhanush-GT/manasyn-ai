@@ -671,7 +671,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       </div>
 
       {/* Chat / Multi-Turn Reflection Messages Stream */}
-      <div id="messages-container" className="flex-1 overflow-y-auto pb-48 p-4 sm:p-6">
+      <div id="messages-container" className="flex-1 overflow-y-auto pb-64 md:pb-48 p-4 sm:p-6 scroll-smooth">
         <div className="max-w-3xl mx-auto w-full space-y-6">
           {entry.messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12">
@@ -769,6 +769,8 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
             </div>
           )}
 
+          {/* Dedicated bottom spacer to ensure long cards and message feeds clear fixed docks */}
+          <div className="h-44 sm:h-36 md:h-24 w-full pointer-events-none" aria-hidden="true" />
           <div ref={chatEndRef} />
         </div>
       </div>

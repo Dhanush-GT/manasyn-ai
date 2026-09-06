@@ -56,34 +56,34 @@ export const ClarityCardView: React.FC<ClarityCardViewProps> = ({
       {/* Grid of Insights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* What I Heard */}
-        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5">
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5 min-w-0">
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
             What I Heard
           </p>
-          <p className="text-xs text-[#17182B] dark:text-slate-200 leading-relaxed font-sans">
+          <p className="text-xs text-[#17182B] dark:text-slate-200 leading-relaxed font-sans break-words whitespace-pre-wrap">
             {whatIHeard}
           </p>
         </div>
 
         {/* Core Dilemma / Question */}
-        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5">
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5 min-w-0">
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <HelpCircle className="w-3 h-3 text-violet-500 dark:text-violet-400" />
+            <HelpCircle className="w-3 h-3 text-violet-500 dark:text-violet-400 shrink-0" />
             Core Dilemma / Question
           </p>
-          <p className="text-xs text-[#17182B] dark:text-slate-200 leading-relaxed font-sans">
+          <p className="text-xs text-[#17182B] dark:text-slate-200 leading-relaxed font-sans break-words whitespace-pre-wrap">
             {coreDilemma}
           </p>
         </div>
 
         {/* Suggested Next Step */}
-        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5">
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 space-y-1.5 min-w-0">
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <ArrowRight className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+            <ArrowRight className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
             Suggested Next Step
           </p>
-          <p className="text-xs text-[#17182B] dark:text-slate-200 leading-relaxed font-sans">
+          <p className="text-xs text-[#17182B] dark:text-slate-200 leading-relaxed font-sans break-words whitespace-pre-wrap">
             {suggestedNextStep}
           </p>
         </div>
