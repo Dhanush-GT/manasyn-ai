@@ -11,6 +11,7 @@ import {
 } from './lib/firebase';
 import type { UserProfile, ReflectionEntry, Milestone, ReflectionMode, AppView } from './types';
 import { Navbar } from './components/Navbar';
+import { Sidebar } from './components/Sidebar';
 import { BottomNavbar } from './components/BottomNavbar';
 import { MobileDrawer } from './components/MobileDrawer';
 import { SettingsView } from './components/SettingsView';
@@ -24,6 +25,7 @@ import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { FeedbackModal } from './components/FeedbackModal';
 import { LocationsView } from './components/LocationsView';
+import { ManasynLogo } from './components/ManasynLogo';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export function App() {
@@ -132,14 +134,38 @@ export function App() {
   const handleSignIn = async () => {
     setAuthError(null);
     setIsAuthLoading(true);
+
+    // Fallback safety timeout: guarantee loading state resets even if the popup is dismissed silently
+    const safetyTimeout = setTimeout(() => {
+      setIsAuthLoading(false);
+    }, 20000);
+
     try {
       await signInWithGoogle();
     } catch (err: unknown) {
-      console.error('Sign in error:', err);
-      setAuthError(
-        err instanceof Error ? err.message : 'Google authentication was cancelled or failed.'
-      );
+      const errorObj = err as { code?: string; message?: string };
+      console.warn('Sign in response:', errorObj?.code || errorObj?.message);
+      
+      const isCancelled =
+        errorObj?.code === 'auth/popup-closed-by-user' ||
+        errorObj?.code === 'auth/cancelled-popup-request' ||
+        errorObj?.code === 'auth/popup-blocked' ||
+        (typeof errorObj?.message === 'string' &&
+          (errorObj.message.includes('popup-closed-by-user') ||
+           errorObj.message.includes('cancelled') ||
+           errorObj.message.includes('closed by user')));
+
+      if (isCancelled) {
+        setAuthError('Sign-in was cancelled. Please try again.');
+      } else {
+        setAuthError(
+          errorObj?.message && !errorObj.message.includes('Firebase')
+            ? errorObj.message
+            : 'Sign-in was cancelled. Please try again.'
+        );
+      }
     } finally {
+      clearTimeout(safetyTimeout);
       setIsAuthLoading(false);
     }
   };
@@ -302,13 +328,18 @@ export function App() {
   if (isAuthLoading) {
     return (
       <div id="loading-state-container" className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center font-sans">
-        <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
-        <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-          Opening Your Journal...
-        </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Securing authentication and private session
-        </p>
+        <div className="flex flex-col items-center justify-center gap-5 max-w-sm animate-in fade-in duration-300">
+          <ManasynLogo size={48} variant="symbol" isDecorative />
+          <RefreshCw className="w-6 h-6 text-indigo-500 animate-spin" />
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white font-display">
+              Opening Manasyn...
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-sans">
+              Signing you in securely.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -327,19 +358,31 @@ export function App() {
 
   const activeEntry = entries.find((e) => e.id === activeEntryId) || null;
   const mappedCount = entries.filter((e) => e.location?.latitude && e.location?.longitude).length;
+  const validEntries = entries.filter((e) => (e.messages && e.messages.length > 0) || (e.tags && e.tags.length > 0) || e.location);
 
   return (
     <div id="app-root-layout" className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 dark:bg-slate-950 flex flex-col">
-      {/* Top Header: Strictly Brand Logo & Tagline (Left), Theme Toggle (Right), Hamburger on Mobile & Desktop */}
+      {/* Top Header */}
       <Navbar
         user={user}
         activeView={activeView}
         onViewChange={handleViewChange}
+        onNewEntry={handleCreateNewEntry}
         onToggleSidebar={() => {
           setIsMobileDrawerOpen((prev) => !prev);
         }}
         theme={theme}
         onToggleTheme={toggleTheme}
+      />
+
+      {/* Desktop Left Navigation Sidebar */}
+      <Sidebar
+        activeView={activeView}
+        onViewChange={handleViewChange}
+        onNewEntry={handleCreateNewEntry}
+        user={user}
+        milestonesCount={milestones.length}
+        entriesCount={validEntries.length}
       />
 
       {/* Global Error Banner */}
@@ -359,8 +402,8 @@ export function App() {
         </div>
       )}
 
-      {/* Main App Workspace with Universal Viewport Padding */}
-      <main id="main-content" className="flex-1 w-full max-w-7xl mx-auto min-w-0 pt-20 pb-24 min-h-screen px-3 sm:px-6">
+      {/* Main App Workspace with Responsive Left Margin for Desktop Sidebar */}
+      <main id="main-content" className="flex-1 w-full max-w-7xl mx-auto min-w-0 pt-20 pb-24 lg:pb-12 min-h-screen px-3 sm:px-6 lg:pl-68">
         {activeView === 'dashboard' ? (
           <DashboardView
             user={user}
@@ -426,6 +469,7 @@ export function App() {
             onBackToJournal={() => handleViewChange('dashboard')}
             onSignOut={handleSignOut}
             onOpenExport={() => handleViewChange('export')}
+            onOpenLocations={() => handleViewChange('locations')}
           />
         ) : activeView === 'admin-dashboard' ? (
           <AdminDashboardView

@@ -104,18 +104,14 @@ export interface AdminSystemStats {
 }
 
 export type MilestoneCategory =
-  | 'project'
+  | 'personal'
+  | 'work'
+  | 'study'
+  | 'wellbeing'
+  | 'relationship'
   | 'decision'
   | 'idea'
-  | 'blocker'
-  | 'learning'
-  | 'personal'
-  | 'general'
-  | 'infrastructure'
-  | 'scaling'
-  | 'product'
-  | 'architecture'
-  | 'operations';
+  | 'project';
 
 export type MilestoneStatus = 'planned' | 'in_progress' | 'achieved';
 

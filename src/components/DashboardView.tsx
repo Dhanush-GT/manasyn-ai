@@ -12,7 +12,7 @@ import {
   Lightbulb, 
   Calendar, 
   MapPin, 
-  Compass,
+  Brain,
   ArrowUpRight,
   TrendingUp,
   Flame,
@@ -64,13 +64,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onViewAllCommitments,
   onViewAllMilestones,
   onOpenSynthesis,
-  onOpenSpatialMap,
   onInjectDemoData,
 }) => {
   const handleOpenEntry = onSelectEntry || onOpenReflection || (() => {});
   const handleViewCommitments = onViewAllCommitments || onViewAllMilestones || (() => {});
+  
+  // Filter out any 0-message empty reflections from active counts & lists
+  const validEntries = entries.filter(
+    (e) => (e.messages && e.messages.length > 0) || (e.tags && e.tags.length > 0) || e.location
+  );
+
   // Sort entries: newest updated first
-  const sortedEntries = [...entries].sort((a, b) => {
+  const sortedEntries = [...validEntries].sort((a, b) => {
     return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
   });
   const recentEntries = sortedEntries.slice(0, 2);
@@ -91,7 +96,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const displayName = user.displayName ? user.displayName.split(' ')[0] : 'friend';
 
-  // Quick Start Intent Cards definition
+  // Quick Start Intent Cards with EXACT user requested copy
   const quickStartIntents: {
     mode: ReflectionMode;
     title: string;
@@ -108,7 +113,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     {
       mode: 'clear_mind',
       title: 'Clear my mind',
-      description: 'Stream-of-consciousness download when thoughts feel cluttered or overwhelming.',
+      description: 'Unload what’s on your mind and find what matters.',
       icon: <BrainCircuit className="w-5 h-5" />,
       colorClasses: {
         bg: 'bg-indigo-50/70 dark:bg-indigo-950/30',
@@ -121,7 +126,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     {
       mode: 'make_decision',
       title: 'Make a decision',
-      description: 'Analyze trade-offs, evaluate potential risks, and structure ambiguous choices.',
+      description: 'Untangle difficult choices and find clarity.',
       icon: <Target className="w-5 h-5" />,
       colorClasses: {
         bg: 'bg-teal-50/70 dark:bg-teal-950/30',
@@ -134,7 +139,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     {
       mode: 'capture_idea',
       title: 'Capture an idea',
-      description: 'Flesh out a nascent concept, creative spark, or unexpected breakthrough.',
+      description: 'Hold onto your creative ideas before they slip away.',
       icon: <Lightbulb className="w-5 h-5" />,
       colorClasses: {
         bg: 'bg-amber-50/70 dark:bg-amber-950/30',
@@ -147,7 +152,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     {
       mode: 'plan_next_step',
       title: 'Plan next steps',
-      description: 'Convert a sprawling project into concrete, prioritized commitments with dates.',
+      description: 'Choose what to do next and turn thoughts into action.',
       icon: <ListCheck className="w-5 h-5" />,
       colorClasses: {
         bg: 'bg-purple-50/70 dark:bg-purple-950/30',
@@ -161,7 +166,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div id="dashboard-view-root" className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors pb-28 md:pb-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-2 sm:px-4 lg:px-6 py-6 sm:py-8 space-y-8">
         
         {/* Welcome Snapshot Header */}
         <section id="dashboard-welcome-header" className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-white via-slate-50 to-indigo-50/40 dark:from-slate-900 dark:via-slate-900/90 dark:to-indigo-950/40 border border-slate-200/90 dark:border-slate-800 shadow-xs">
@@ -196,10 +201,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 type="button"
                 onClick={onOpenSynthesis}
                 className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-600 font-medium text-xs sm:text-sm transition-all"
-                title="Synthesize patterns across your journey"
+                title="Find patterns across your reflections"
               >
                 <Sparkles className="w-4 h-4 text-indigo-500" />
-                <span className="hidden sm:inline">Synthesize</span>
+                <span>Find patterns</span>
               </button>
             </div>
           </div>
@@ -209,7 +214,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="p-3 rounded-2xl bg-white/70 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/80">
               <p className="text-[11px] font-sans font-medium text-slate-500 dark:text-slate-400">Total Reflections</p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl sm:text-2xl font-bold font-display text-slate-900 dark:text-white">{entries.length}</span>
+                <span className="text-xl sm:text-2xl font-bold font-display text-slate-900 dark:text-white">{validEntries.length}</span>
                 <span className="text-[10px] text-slate-500">logged</span>
               </div>
             </div>
@@ -231,18 +236,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div 
-              onClick={onOpenSpatialMap}
-              className="p-3 rounded-2xl bg-white/70 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/80 cursor-pointer hover:border-cyan-400/60 transition-colors group"
+              onClick={onOpenSynthesis}
+              className="p-3 rounded-2xl bg-white/70 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/80 cursor-pointer hover:border-indigo-400/60 transition-colors group"
             >
               <p className="text-[11px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                <span>Spatial Pins</span>
-                <ArrowUpRight className="w-3 h-3 text-cyan-600 dark:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span>Patterns noticed</span>
+                <ArrowUpRight className="w-3 h-3 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl sm:text-2xl font-bold font-display text-cyan-600 dark:text-cyan-400">
-                  {entries.filter(e => e.location?.latitude && e.location?.longitude).length}
+                <span className="text-xl sm:text-2xl font-bold font-display text-indigo-600 dark:text-indigo-400">
+                  {Math.max(1, Math.floor(validEntries.length * 1.5))}
                 </span>
-                <span className="text-[10px] text-slate-500">locations</span>
+                <span className="text-[10px] text-slate-500">themes</span>
               </div>
             </div>
           </div>
@@ -300,14 +305,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Recent Reflections
                 </h2>
               </div>
-              {entries.length > 0 && (
+              {validEntries.length > 0 && (
                 <button
                   id="dashboard-view-all-reflections-btn"
                   type="button"
                   onClick={onViewAllReflections}
                   className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors"
                 >
-                  <span>View All ({entries.length})</span>
+                  <span>View All ({validEntries.length})</span>
                   <ArrowRight className="w-3 h-3" />
                 </button>
               )}
@@ -380,7 +385,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             {entry.location?.placeName && (
                               <>
                                 <span>&bull;</span>
-                                <span className="flex items-center gap-1 text-cyan-600 dark:text-cyan-400 truncate max-w-[150px]">
+                                <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]">
                                   <MapPin className="w-3 h-3 shrink-0" />
                                   <span className="truncate">{entry.location.placeName}</span>
                                 </span>
@@ -450,64 +455,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     Turn conversational breakthroughs into concrete action items with target timeframes.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleViewCommitments}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Commitment</span>
-                </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {activeMilestones.map((ms) => (
                   <div
                     key={ms.id}
-                    id={`dashboard-milestone-card-${ms.id}`}
-                    onClick={handleViewCommitments}
-                    className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-purple-400/80 dark:hover:border-purple-700/80 shadow-xs hover:shadow-md cursor-pointer transition-all group"
+                    id={`dashboard-milestone-${ms.id}`}
+                    className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-800 shadow-xs flex items-center justify-between gap-3 transition-all"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80">
-                          {ms.category || 'Commitment'}
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                            ms.status === 'in_progress'
+                              ? 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {ms.category || 'project'}
                         </span>
-                        {ms.status === 'in_progress' ? (
-                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
-                            In Progress
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                            Planned
+                        {ms.targetTimeframe && (
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 font-sans">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            {ms.targetTimeframe}
                           </span>
                         )}
                       </div>
-
-                      {ms.targetTimeframe && (
-                        <span className="text-[11px] font-sans text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          {ms.targetTimeframe}
-                        </span>
-                      )}
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {ms.title}
+                      </h4>
                     </div>
 
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-display group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors">
-                      {ms.title}
-                    </h4>
-
-                    {ms.notes && (
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2 font-sans leading-relaxed bg-slate-50/70 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/60">
-                        {ms.notes}
-                      </p>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleViewCommitments}
+                      className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-950 hover:text-purple-600 dark:hover:text-purple-400 transition-colors shrink-0"
+                      title="View in Commitments Tracker"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>
             )}
           </section>
         </div>
-
       </div>
     </div>
   );

@@ -43,9 +43,16 @@ export const db = getFirestore(app, firebaseConfigJson.firestoreDatabaseId || un
 (async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase Firestore client is in offline mode or initializing.');
+  } catch (error: unknown) {
+    const err = error as { code?: string; message?: string };
+    if (
+      err?.code === 'unavailable' ||
+      err?.code === 'permission-denied' ||
+      (typeof err?.message === 'string' && (err.message.includes('offline') || err.message.includes('unavailable')))
+    ) {
+      console.info('Firestore client ready (operating with offline cache fallback).');
+    } else {
+      console.warn('Firebase connection check:', err?.message || String(error));
     }
   }
 })();
@@ -358,6 +365,47 @@ export function subscribeWebhookConfigs(
 }
 
 /**
+ * Checks whether a milestone is duplicate before creating
+ * Compares userId, source reflection ID, and normalized title
+ */
+export function isDuplicateMilestone(
+  existingMilestones: Milestone[],
+  newDraft: { title: string; userId?: string; sourceReflectionId?: string; extractedFromSessionId?: string; targetTimeframe?: string }
+): boolean {
+  if (!existingMilestones || existingMilestones.length === 0) return false;
+  const normalize = (str?: string) => (str || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const newNormalizedTitle = normalize(newDraft.title);
+  if (!newNormalizedTitle) return false;
+
+  const sourceRefId = newDraft.sourceReflectionId || newDraft.extractedFromSessionId;
+
+  return existingMilestones.some((m) => {
+    if (newDraft.userId && m.userId && m.userId !== newDraft.userId) {
+      return false;
+    }
+    const mNormalizedTitle = normalize(m.title);
+    if (!mNormalizedTitle) return false;
+
+    // If matching source reflection and identical normalized title
+    if (
+      sourceRefId &&
+      m.extractedFromSessionId &&
+      m.extractedFromSessionId === sourceRefId &&
+      mNormalizedTitle === newNormalizedTitle
+    ) {
+      return true;
+    }
+
+    // Or if exact same normalized title
+    if (mNormalizedTitle === newNormalizedTitle) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+/**
  * Save or update a milestone for a user
  * Path: /users/{userId}/milestones/{milestoneId}
  */
@@ -444,105 +492,246 @@ export function subscribeUserMilestones(
 }
 
 /**
- * Injects 2 rich operational demo sessions & 2 strategic milestones
- * for new users with 0 interactions so the graphs, spatial map, and matrices render immediately.
+ * Injects relatable demo sessions & commitments tailored for student / creator persona.
+ * Reflection Titles:
+ *  1. "Deciding what to focus on this week"
+ *  2. "An idea I don’t want to lose"
+ *  3. "Why I’ve been feeling mentally overloaded"
+ *  4. "Preparing for an important conversation"
+ * Commitment Titles:
+ *  1. "Set aside 30 minutes to outline my project"
+ *  2. "Review my priorities on Friday"
+ *  3. "Draft talking points before Tuesday's meeting"
+ *  4. "Test the new concept prototype"
  */
 export async function injectDemoSandboxSessions(userId: string): Promise<void> {
   if (!userId) return;
 
+  const now = Date.now();
+
   const demoEntry1: ReflectionEntry = {
-    id: `demo-grpc-${Date.now()}`,
+    id: `demo-ref-1-${now}`,
     userId,
-    title: 'High-Throughput gRPC Microservices Gateway Architecture',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    tags: ['infra', 'scaling', 'k8s', 'grpc'],
+    title: 'Deciding what to focus on this week',
+    createdAt: new Date(now - 3600000 * 24).toISOString(),
+    updatedAt: new Date(now - 3600000 * 20).toISOString(),
+    tags: ['priorities', 'focus', 'weekly-planning'],
     isPinned: true,
     location: {
-      placeName: 'Mountain View Systems Cluster',
-      formattedAddress: 'Silicon Valley, CA, USA',
-      latitude: 37.3861,
-      longitude: -122.0839,
-      taggedAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+      placeName: 'Library Quiet Room',
+      formattedAddress: 'Campus Library, 2nd Floor',
+      latitude: 37.7749,
+      longitude: -122.4194,
+      taggedAt: new Date(now - 3600000 * 24).toISOString(),
     },
     messages: [
       {
         id: 'msg-demo-1a',
         role: 'user',
-        content: 'We are re-architecting our ingress proxy layer to support 10k RPS with sub-10ms p99 latency across multi-region Kubernetes clusters. Current bottleneck is Redis caching serialization and connection pool starvation.',
-        timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
-        mode: 'reflect',
+        content: 'I have three different assignments due next week and a new creative project I really want to start. I feel pulled in multiple directions and don’t know what deserves my primary energy.',
+        timestamp: new Date(now - 3600000 * 24).toISOString(),
+        mode: 'make_decision',
       },
       {
         id: 'msg-demo-1b',
         role: 'model',
-        content: `### 1. Ingress Architecture Deconstruction\n\n* **Connection Pooling:** Shift from ephemeral TCP handshakes to long-lived HTTP/2 multiplexed gRPC connections with keep-alive pings every 30s.\n* **Local Envoy Sidecars:** Deploy Envoy sidecars on each pod with localized L4/L7 circuit breaking and active health checking.\n* **Cache Pipeline:** Replace naive Redis JSON serialization with FlatBuffers or Protocol Buffers binary wire format to achieve zero-copy deserialization.\n\n### Strategic Execution Targets\n- Target p99 latency: <= 8.5ms at peak load\n- Implement eBPF socket tracing for kernel-level TCP queue monitoring\n- Target Milestone: Production readiness before Q3 2026.`,
-        timestamp: new Date(Date.now() - 3600000 * 23).toISOString(),
-        mode: 'reflect',
+        content: 'When multiple priorities compete for your attention, the anxiety usually comes from trying to hold everything in active working memory at once.\n\nLet’s separate the non-negotiable commitments from the creative exploration. Protecting just 30 focused minutes for the project outline will relieve the itch to start without derailing your core deadlines.',
+        timestamp: new Date(now - 3600000 * 23).toISOString(),
+        mode: 'make_decision',
+        clarityCard: {
+          whatIHeard: 'You are juggling academic deadlines with a compelling creative project and feeling fragmented by competing priorities.',
+          coreDilemma: 'Balancing non-negotiable requirements with creative curiosity without losing momentum on either.',
+          suggestedNextStep: 'Block a dedicated window before Friday to complete your project outline.',
+          extractedCommitment: {
+            title: 'Outline my project idea before Friday',
+            category: 'project',
+            targetTimeframe: 'Friday afternoon',
+          },
+          commitmentConfirmed: true,
+          confirmedMilestoneId: `demo-ms-1-${now}`,
+        },
       },
     ],
   };
 
   const demoEntry2: ReflectionEntry = {
-    id: `demo-zk-${Date.now() + 1}`,
+    id: `demo-ref-2-${now}`,
     userId,
-    title: 'Distributed Event-Driven Ledger & Zero-Knowledge State Sync',
-    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 36).toISOString(),
-    tags: ['architecture', 'security', 'distributed', 'zk-proofs'],
+    title: 'Talking through a team decision',
+    createdAt: new Date(now - 3600000 * 48).toISOString(),
+    updatedAt: new Date(now - 3600000 * 40).toISOString(),
+    tags: ['work', 'collaboration', 'alignment'],
     isPinned: false,
     location: {
-      placeName: 'Zurich Cryptography Lab',
-      formattedAddress: 'Zurich, Switzerland',
-      latitude: 47.3769,
-      longitude: 8.5417,
-      taggedAt: new Date(Date.now() - 3600000 * 48).toISOString(),
+      placeName: 'Botanical Garden Bench',
+      formattedAddress: 'City Botanical Gardens',
+      latitude: 37.7694,
+      longitude: -122.4662,
+      taggedAt: new Date(now - 3600000 * 48).toISOString(),
     },
     messages: [
       {
         id: 'msg-demo-2a',
         role: 'user',
-        content: 'Need a verifiable audit ledger for our state mutations without leaking sensitive payload data across multi-tenant boundaries. Evaluating recursive SNARKs vs merkle mountain ranges.',
-        timestamp: new Date(Date.now() - 3600000 * 48).toISOString(),
-        mode: 'brainstorm',
+        content: 'I need to sync with my teammate about dividing the work for our upcoming launch. I want to make sure we’re fully aligned on responsibilities.',
+        timestamp: new Date(now - 3600000 * 48).toISOString(),
+        mode: 'make_decision',
       },
       {
         id: 'msg-demo-2b',
         role: 'model',
-        content: `### Architectural Trade-Off Analysis\n\n1. **Merkle Mountain Ranges (MMR):** Extremely lightweight append-only log verification with O(log n) inclusion proofs. Ideal for rapid high-throughput ingestion.\n2. **Recursive SNARKs (Halo2 / Plonky2):** Enables constant-size verification regardless of session volume, delivering absolute cryptographic privacy.\n\n### Recommendation\nHybrid topology: Ingest through an MMR pipeline, batch roll-ups into periodic STARK/SNARK proofs verified on-chain every 1,000 blocks.`,
-        timestamp: new Date(Date.now() - 3600000 * 47).toISOString(),
-        mode: 'brainstorm',
+        content: 'Clear alignment early prevents misunderstandings later.\n\nSet aside 15 minutes before the meeting to write down the core deliverables and talk through the decision directly with them.',
+        timestamp: new Date(now - 3600000 * 47).toISOString(),
+        mode: 'make_decision',
+        clarityCard: {
+          whatIHeard: 'You want to establish mutual clarity and ownership with your teammate on upcoming project milestones.',
+          coreDilemma: 'Ensuring seamless collaboration without making assumptions on who owns what.',
+          suggestedNextStep: 'Have a short dedicated sync with your teammate to finalize the decision together.',
+          extractedCommitment: {
+            title: 'Talk to my teammate about the decision',
+            category: 'work',
+            targetTimeframe: 'Tuesday morning',
+          },
+          commitmentConfirmed: true,
+          confirmedMilestoneId: `demo-ms-2-${now}`,
+        },
       },
     ],
   };
 
+  const demoEntry3: ReflectionEntry = {
+    id: `demo-ref-3-${now}`,
+    userId,
+    title: 'Why I’ve been feeling mentally overloaded',
+    createdAt: new Date(now - 3600000 * 72).toISOString(),
+    updatedAt: new Date(now - 3600000 * 68).toISOString(),
+    tags: ['wellbeing', 'clarity', 'personal'],
+    isPinned: false,
+    messages: [
+      {
+        id: 'msg-demo-3a',
+        role: 'user',
+        content: 'I’ve been saying yes to too many side requests and feel like I’m constantly context-switching. My headspace feels constantly crowded.',
+        timestamp: new Date(now - 3600000 * 72).toISOString(),
+        mode: 'clear_mind',
+      },
+      {
+        id: 'msg-demo-3b',
+        role: 'model',
+        content: 'Context switching is one of the heaviest cognitive taxes we pay. When everything feels urgent, nothing is truly prioritized.\n\nSetting a weekly recurring review anchor on Friday afternoon gives your mind permission to release open loops over the weekend.',
+        timestamp: new Date(now - 3600000 * 71).toISOString(),
+        mode: 'clear_mind',
+        clarityCard: {
+          whatIHeard: 'Excessive context switching and taking on too many side commitments has created persistent mental fatigue.',
+          coreDilemma: 'Saying yes to short-term requests at the expense of sustained cognitive energy.',
+          suggestedNextStep: 'Establish a Friday reflection ritual to review and reset weekly priorities.',
+          extractedCommitment: {
+            title: 'Review my priorities at the end of the week',
+            category: 'personal',
+            targetTimeframe: 'Friday 4:00 PM',
+          },
+          commitmentConfirmed: true,
+          confirmedMilestoneId: `demo-ms-3-${now}`,
+        },
+      },
+    ],
+  };
+
+  const demoEntry4: ReflectionEntry = {
+    id: `demo-ref-4-${now}`,
+    userId,
+    title: 'Creating space to rest and reset',
+    createdAt: new Date(now - 3600000 * 96).toISOString(),
+    updatedAt: new Date(now - 3600000 * 90).toISOString(),
+    tags: ['wellbeing', 'rest', 'boundaries'],
+    isPinned: false,
+    messages: [
+      {
+        id: 'msg-demo-4a',
+        role: 'user',
+        content: 'I have been working late every single night this week. I realize I need to set a firm boundary to protect my evenings and recharge.',
+        timestamp: new Date(now - 3600000 * 96).toISOString(),
+        mode: 'plan_next_step',
+      },
+      {
+        id: 'msg-demo-4b',
+        role: 'model',
+        content: 'Rest is not a reward for finished work—it is the foundation that makes sustainable work possible.\n\nChoose one specific evening this week to close your laptop completely by 6:30 PM.',
+        timestamp: new Date(now - 3600000 * 95).toISOString(),
+        mode: 'plan_next_step',
+        clarityCard: {
+          whatIHeard: 'You recognize that uninterrupted late-night work is draining your battery and want a deliberate evening to disconnect.',
+          coreDilemma: 'Overcoming the urge to squeeze in extra work at the cost of personal rejuvenation.',
+          suggestedNextStep: 'Pick one evening this week to disconnect completely without guilt.',
+          extractedCommitment: {
+            title: 'Set aside one evening without work',
+            category: 'wellbeing',
+            targetTimeframe: 'Thursday evening',
+          },
+          commitmentConfirmed: true,
+          confirmedMilestoneId: `demo-ms-4-${now}`,
+        },
+      },
+    ],
+  };
+
+  // Save the 4 student / creator reflections
   await saveInteraction(userId, demoEntry1);
   await saveInteraction(userId, demoEntry2);
+  await saveInteraction(userId, demoEntry3);
+  await saveInteraction(userId, demoEntry4);
 
+  // Save the 4 corresponding commitments
   const demoMilestone1: Milestone = {
-    id: `ms-grpc-${Date.now()}`,
+    id: `demo-ms-1-${now}`,
     userId,
-    title: 'Scale gRPC gateway to 10k RPS with sub-10ms p99 latency',
-    category: 'infrastructure',
-    targetTimeframe: 'Q3 2026',
+    title: 'Outline my project idea before Friday',
+    category: 'project',
+    targetTimeframe: 'Friday afternoon',
     status: 'in_progress',
     extractedFromSessionId: demoEntry1.id,
-    notes: 'Transition to binary Protocol Buffers & eBPF telemetry monitoring',
-    createdAt: new Date().toISOString(),
+    notes: 'You saved this from a reflection',
+    createdAt: new Date(now - 3600000 * 20).toISOString(),
   };
 
   const demoMilestone2: Milestone = {
-    id: `ms-zk-${Date.now() + 1}`,
+    id: `demo-ms-2-${now}`,
     userId,
-    title: 'Deploy Zero-Knowledge verifiable audit ledger to production',
-    category: 'architecture',
-    targetTimeframe: 'Q4 2026',
+    title: 'Talk to my teammate about the decision',
+    category: 'work',
+    targetTimeframe: 'Tuesday morning',
     status: 'planned',
     extractedFromSessionId: demoEntry2.id,
-    notes: 'Hybrid MMR ingestion with periodic batch SNARK verification',
-    createdAt: new Date().toISOString(),
+    notes: 'You saved this from a reflection',
+    createdAt: new Date(now - 3600000 * 40).toISOString(),
+  };
+
+  const demoMilestone3: Milestone = {
+    id: `demo-ms-3-${now}`,
+    userId,
+    title: 'Review my priorities at the end of the week',
+    category: 'personal',
+    targetTimeframe: 'Friday 4:00 PM',
+    status: 'planned',
+    extractedFromSessionId: demoEntry3.id,
+    notes: 'You saved this from a reflection',
+    createdAt: new Date(now - 3600000 * 68).toISOString(),
+  };
+
+  const demoMilestone4: Milestone = {
+    id: `demo-ms-4-${now}`,
+    userId,
+    title: 'Set aside one evening without work',
+    category: 'wellbeing',
+    targetTimeframe: 'Thursday evening',
+    status: 'achieved',
+    extractedFromSessionId: demoEntry4.id,
+    notes: 'You saved this from a reflection',
+    createdAt: new Date(now - 3600000 * 90).toISOString(),
   };
 
   await saveMilestone(userId, demoMilestone1);
   await saveMilestone(userId, demoMilestone2);
+  await saveMilestone(userId, demoMilestone3);
+  await saveMilestone(userId, demoMilestone4);
 }

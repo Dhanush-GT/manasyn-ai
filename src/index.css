@@ -24,10 +24,43 @@ html, body {
   font-family: var(--font-sans);
 }
 
+html.dark, :root.dark, .dark {
+  color-scheme: dark;
+  scrollbar-color: #334155 transparent;
+}
+
+html.light, :root.light, .light {
+  color-scheme: light;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
 body {
   background-color: #f8fafc;
   color: #0f172a;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom themed scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
 }
 
 #root {

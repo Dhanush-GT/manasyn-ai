@@ -1,19 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   X, 
   Settings, 
-  Download, 
   LogOut, 
   Sun, 
   Moon, 
-  ShieldCheck, 
   ChevronRight,
   MessageSquarePlus,
   BookOpen,
   Target,
   Brain,
-  Compass,
-  LayoutDashboard
+  Home
 } from 'lucide-react';
 import { ManasynLogo } from './ManasynLogo';
 import { UserProfile, AppView } from '../types';
@@ -41,28 +38,68 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   theme,
   onToggleTheme,
 }) => {
+  // Lock body scroll when mobile drawer is open to prevent double scrollbars
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  const featureItems: { id: AppView; label: string; desc: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'dashboard', label: 'Dashboard', desc: 'Snapshot & insights overview', icon: LayoutDashboard },
-    { id: 'reflections', label: 'Reflections', desc: 'Private cognitive journal', icon: BookOpen },
-    { id: 'milestones', label: 'Commitments', desc: 'Action items & strategic milestones', icon: Target },
-    { id: 'patterns', label: 'Patterns', desc: 'AI themes & cognitive synthesis', icon: Brain },
-    { id: 'locations', label: 'Locations', desc: 'Spatial sanctuaries & focus pins', icon: Compass },
-    { id: 'export', label: 'Export Data', desc: 'Download JSON, Markdown or sync', icon: Download },
+  const primaryNavItems: { 
+    id: AppView; 
+    label: string; 
+    desc: string; 
+    icon: React.ComponentType<{ className?: string }> 
+  }[] = [
+    { 
+      id: 'dashboard', 
+      label: 'Home', 
+      desc: 'Your reflections and progress at a glance', 
+      icon: Home 
+    },
+    { 
+      id: 'reflections', 
+      label: 'Reflections', 
+      desc: 'Your conversations and moments of clarity', 
+      icon: BookOpen 
+    },
+    { 
+      id: 'milestones', 
+      label: 'Commitments', 
+      desc: 'The next steps you choose to remember', 
+      icon: Target 
+    },
+    { 
+      id: 'patterns', 
+      label: 'Patterns', 
+      desc: 'Themes and changes across your reflections', 
+      icon: Brain 
+    },
+    { 
+      id: 'settings', 
+      label: 'Settings', 
+      desc: 'Account, privacy and personalization', 
+      icon: Settings 
+    },
   ];
 
   return (
     <div id="side-drawer-root">
-      {/* Backdrop */}
+      {/* Blurred Backdrop Overlay - auto closes drawer on click */}
       <div 
         id="drawer-backdrop"
         onClick={onClose}
-        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
         aria-hidden="true"
       />
 
-      {/* Drawer Panel: Grouped into Features and Account & Preferences */}
+      {/* Drawer Panel: Primary Calm Navigation & Account */}
       <aside
         id="mobile-side-drawer"
         role="dialog"
@@ -86,17 +123,17 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         </div>
 
         {/* Scrollable Container */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
           
-          {/* SECTION 1: Features */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">
-              Features
+          {/* PRIMARY NAVIGATION ITEMS */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1 mb-2">
+              Menu
             </p>
             <div className="space-y-1">
-              {featureItems.map((item) => {
+              {primaryNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeView === item.id || (item.id === 'locations' && activeView === 'spatial-map');
+                const isActive = activeView === item.id;
                 return (
                   <button
                     key={item.id}
@@ -106,7 +143,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                       onNavigate(item.id);
                       onClose();
                     }}
-                    className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold transition-all border ${
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all border ${
                       isActive
                         ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/80 shadow-xs'
                         : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-transparent'
@@ -121,27 +158,29 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                         <Icon className="w-4 h-4" />
                       </div>
                       <div className="text-left">
-                        <span className="block">{item.label}</span>
-                        <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">{item.desc}</span>
+                        <span className="block font-semibold text-xs">{item.label}</span>
+                        <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 leading-tight block">
+                          {item.desc}
+                        </span>
                       </div>
                     </div>
-                    <ChevronRight className={`w-4 h-4 ${isActive ? 'text-indigo-500' : 'text-slate-400'}`} />
+                    <ChevronRight className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-500' : 'text-slate-400'}`} />
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* SECTION 2: Account & Preferences */}
-          <div className="space-y-2.5">
+          {/* ACCOUNT & PREFERENCES */}
+          <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800/80">
             <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">
-              Account & Preferences
+              Account
             </p>
 
             {/* User Profile Card */}
             <div 
               id="drawer-user-info-card"
-              className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 space-y-2"
+              className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 space-y-2"
             >
               <div className="flex items-center gap-2.5">
                 {user.photoURL ? (
@@ -159,50 +198,21 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                    {user.displayName || 'Journaler'}
+                    {user.displayName || 'Personal Journal'}
                   </p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-sans truncate select-all">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-sans truncate max-w-[200px] select-all">
                     {user.email || 'Private Account'}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1.5 border-t border-slate-200 dark:border-slate-800/80 text-[10px] text-slate-500 font-sans">
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>Google Auth Verified</span>
-                </span>
+              <div className="pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 font-sans">
+                Signed in with Google
               </div>
             </div>
 
-            {/* Account Action Buttons */}
+            {/* Secondary Actions */}
             <div className="space-y-1">
-              {/* Profile & Settings */}
-              <button
-                id="drawer-nav-settings-btn"
-                type="button"
-                onClick={() => {
-                  onNavigate('settings');
-                  onClose();
-                }}
-                className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold transition-all border ${
-                  activeView === 'settings'
-                    ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/80'
-                    : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-transparent'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <Settings className="w-4 h-4" />
-                  </div>
-                  <div className="text-left">
-                    <span>Profile & Settings</span>
-                    <p className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Account & AI preferences</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              </button>
-
               {/* Send Feedback */}
               {onOpenFeedback && (
                 <button
@@ -212,40 +222,48 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                     onOpenFeedback();
                     onClose();
                   }}
-                  className="w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border border-transparent"
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border border-transparent"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/70 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/70 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
                       <MessageSquarePlus className="w-4 h-4" />
                     </div>
                     <div className="text-left">
-                      <span>Send Feedback</span>
-                      <p className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Suggestions or bug reports</p>
+                      <span className="block font-semibold">Send Feedback</span>
+                      <p className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                        Share an idea or report a problem
+                      </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                 </button>
               )}
 
-              {/* Theme Toggle */}
+              {/* Appearance Toggle */}
               <button
                 id="drawer-toggle-theme-btn"
                 type="button"
                 onClick={onToggleTheme}
-                className="w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border border-transparent"
+                className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border border-transparent"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                    {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                   </div>
                   <div className="text-left">
-                    <span>{theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}</span>
-                    <p className="text-[10px] font-normal text-slate-500 dark:text-slate-400 capitalize">{theme} mode active</p>
+                    <span className="block font-semibold">Appearance</span>
+                    <p className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                      {theme === 'dark' ? 'Dark theme' : 'Light theme'}
+                    </p>
                   </div>
                 </div>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  {theme}
-                </span>
+                <div className={`w-9 h-5 rounded-full transition-colors relative p-0.5 shrink-0 ${
+                  theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}>
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                    theme === 'dark' ? 'translate-x-4' : 'translate-x-0'
+                  }`} />
+                </div>
               </button>
             </div>
           </div>

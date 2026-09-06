@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Target, 
   CheckCircle2, 
@@ -6,20 +6,17 @@ import {
   Sparkles, 
   Plus, 
   Trash2, 
-  ArrowUpRight, 
   Layers, 
   Filter, 
-  Cpu, 
   TrendingUp, 
   Calendar,
-  AlertCircle,
   ExternalLink,
-  ChevronRight,
-  Flame,
-  Search
+  Search,
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import type { Milestone, MilestoneCategory, MilestoneStatus, ReflectionEntry } from '../types';
-import { saveMilestone, updateMilestoneStatus, deleteMilestone } from '../lib/firebase';
+import { saveMilestone, updateMilestoneStatus, deleteMilestone, isDuplicateMilestone } from '../lib/firebase';
 
 interface MilestonesTrackerViewProps {
   userId: string;
@@ -30,19 +27,26 @@ interface MilestonesTrackerViewProps {
   onInjectDemoData?: () => void;
 }
 
+const CATEGORIES: MilestoneCategory[] = [
+  'personal',
+  'work',
+  'study',
+  'wellbeing',
+  'relationship',
+  'decision',
+  'idea',
+  'project'
+];
+
 const CATEGORY_COLORS: Record<MilestoneCategory, { bg: string; text: string; border: string }> = {
+  personal: { bg: 'bg-teal-100 dark:bg-teal-950/70', text: 'text-teal-800 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800/80' },
+  work: { bg: 'bg-slate-200 dark:bg-slate-800', text: 'text-slate-800 dark:text-slate-200', border: 'border-slate-300 dark:border-slate-700' },
+  study: { bg: 'bg-sky-100 dark:bg-sky-950/70', text: 'text-sky-800 dark:text-sky-300', border: 'border-sky-200 dark:border-sky-800/80' },
+  wellbeing: { bg: 'bg-emerald-100 dark:bg-emerald-950/70', text: 'text-emerald-800 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800/80' },
+  relationship: { bg: 'bg-rose-100 dark:bg-rose-950/70', text: 'text-rose-800 dark:text-rose-300', border: 'border-rose-200 dark:border-rose-800/80' },
   decision: { bg: 'bg-indigo-100 dark:bg-indigo-950/70', text: 'text-indigo-800 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800/80' },
   idea: { bg: 'bg-violet-100 dark:bg-violet-950/70', text: 'text-violet-800 dark:text-violet-300', border: 'border-violet-200 dark:border-violet-800/80' },
-  blocker: { bg: 'bg-rose-100 dark:bg-rose-950/70', text: 'text-rose-800 dark:text-rose-300', border: 'border-rose-200 dark:border-rose-800/80' },
-  learning: { bg: 'bg-emerald-100 dark:bg-emerald-950/70', text: 'text-emerald-800 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800/80' },
   project: { bg: 'bg-blue-100 dark:bg-blue-950/70', text: 'text-blue-800 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800/80' },
-  infrastructure: { bg: 'bg-slate-200 dark:bg-slate-800', text: 'text-slate-800 dark:text-slate-200', border: 'border-slate-300 dark:border-slate-700' },
-  scaling: { bg: 'bg-emerald-100 dark:bg-emerald-950/70', text: 'text-emerald-800 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800/80' },
-  product: { bg: 'bg-purple-100 dark:bg-purple-950/70', text: 'text-purple-800 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800/80' },
-  architecture: { bg: 'bg-slate-200 dark:bg-slate-800', text: 'text-slate-800 dark:text-slate-200', border: 'border-slate-300 dark:border-slate-700' },
-  operations: { bg: 'bg-amber-100 dark:bg-amber-950/70', text: 'text-amber-800 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800/80' },
-  personal: { bg: 'bg-teal-100 dark:bg-teal-950/70', text: 'text-teal-800 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800/80' },
-  general: { bg: 'bg-slate-200 dark:bg-slate-800', text: 'text-slate-800 dark:text-slate-200', border: 'border-slate-300 dark:border-slate-700' },
 };
 
 export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
@@ -58,13 +62,27 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState<MilestoneCategory>('decision');
+  const [newCategory, setNewCategory] = useState<MilestoneCategory>('personal');
   const [newTimeframe, setNewTimeframe] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Filter milestones
-  const filteredMilestones = milestones.filter((ms) => {
+  // Strictly deduplicate milestones to ensure identical items are never rendered twice
+  const deduplicatedMilestones = useMemo(() => {
+    const seen = new Set<string>();
+    return milestones.filter((ms) => {
+      const normTitle = (ms.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const key = `${ms.extractedFromSessionId || ''}_${normTitle}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [milestones]);
+
+  // Filter deduplicated milestones
+  const filteredMilestones = deduplicatedMilestones.filter((ms) => {
     const matchesCategory = selectedCategory === 'all' || ms.category === selectedCategory;
     const matchesStatus = selectedStatus === 'all' || ms.status === selectedStatus;
     const matchesSearch =
@@ -75,16 +93,22 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
     return matchesCategory && matchesStatus && matchesSearch;
   });
 
-  // Calculate high-signal metrics
-  const totalCount = milestones.length;
-  const inProgressCount = milestones.filter((m) => m.status === 'in_progress').length;
-  const achievedCount = milestones.filter((m) => m.status === 'achieved').length;
-  const plannedCount = milestones.filter((m) => m.status === 'planned').length;
+  // Calculate metrics
+  const totalCount = deduplicatedMilestones.length;
+  const inProgressCount = deduplicatedMilestones.filter((m) => m.status === 'in_progress').length;
+  const achievedCount = deduplicatedMilestones.filter((m) => m.status === 'achieved').length;
   const completionRate = totalCount > 0 ? Math.round((achievedCount / totalCount) * 100) : 0;
 
   const handleCreateMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
     if (!newTitle.trim() || !userId) return;
+
+    // Strict idempotency check
+    if (isDuplicateMilestone(milestones, { title: newTitle.trim(), targetTimeframe: newTimeframe.trim() })) {
+      setValidationError('This commitment already exists in your list.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -105,13 +129,23 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
       setNewNotes('');
       setIsAddModalOpen(false);
     } catch (err) {
-      console.error('Failed to create milestone:', err);
+      console.error('Failed to create commitment:', err);
+      setValidationError('Could not save commitment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleStatusChange = async (milestoneId: string, currentStatus: MilestoneStatus) => {
+  const handleToggleComplete = async (milestoneId: string, currentStatus: MilestoneStatus) => {
+    const nextStatus: MilestoneStatus = currentStatus === 'achieved' ? 'in_progress' : 'achieved';
+    try {
+      await updateMilestoneStatus(userId, milestoneId, nextStatus);
+    } catch (err) {
+      console.error('Failed to update commitment status:', err);
+    }
+  };
+
+  const handleStatusCycle = async (milestoneId: string, currentStatus: MilestoneStatus) => {
     let nextStatus: MilestoneStatus = 'in_progress';
     if (currentStatus === 'planned') nextStatus = 'in_progress';
     else if (currentStatus === 'in_progress') nextStatus = 'achieved';
@@ -120,16 +154,21 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
     try {
       await updateMilestoneStatus(userId, milestoneId, nextStatus);
     } catch (err) {
-      console.error('Failed to update milestone status:', err);
+      console.error('Failed to update commitment status:', err);
     }
   };
 
   const handleDelete = async (milestoneId: string) => {
-    if (!window.confirm('Are you sure you want to remove this milestone?')) return;
+    if (deleteConfirmId !== milestoneId) {
+      setDeleteConfirmId(milestoneId);
+      return;
+    }
+
     try {
       await deleteMilestone(userId, milestoneId);
+      setDeleteConfirmId(null);
     } catch (err) {
-      console.error('Failed to delete milestone:', err);
+      console.error('Failed to delete commitment:', err);
     }
   };
 
@@ -144,14 +183,14 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                 <Target className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
-                  <span>Commitments & Action Steps</span>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white font-display flex items-center gap-2 flex-wrap">
+                  <span>Commitments</span>
                   <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80">
-                    Extracted from Reflections
+                    CHOSEN FROM REFLECTIONS
                   </span>
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-0.5">
-                  Actionable commitments, decisions, and milestones harvested from your conversational reflections.
+                  Keep track of the next steps you choose during your reflections.
                 </p>
               </div>
             </div>
@@ -173,7 +212,10 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
             <button
               id="add-custom-milestone-btn"
               type="button"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                setValidationError(null);
+                setIsAddModalOpen(true);
+              }}
               className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
@@ -218,15 +260,15 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
         </div>
       </div>
 
-      {/* Filter and Search Bar: Clean scrollbar-hidden horizontal scroll container with proper right-padding on mobile */}
-      <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 w-full min-w-0 max-w-full">
+      {/* Filter and Search Bar: Mobile optimized with responsive wrapping and smooth scrolling */}
+      <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0 w-full min-w-0 max-w-full">
         {/* Category Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar scrollbar-none [&::-webkit-scrollbar]:hidden w-full md:w-auto min-w-0 pr-6 md:pr-0 shrink-0 md:flex-wrap">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none [&::-webkit-scrollbar]:hidden w-full lg:w-auto min-w-0 pb-1 lg:pb-0 shrink-0">
           <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1 shrink-0 font-medium">
             <Filter className="w-3.5 h-3.5 text-indigo-500" />
             Category:
           </span>
-          {['all', 'decision', 'idea', 'blocker', 'learning', 'project', 'personal'].map((cat) => (
+          {['all', ...CATEGORIES].map((cat) => (
             <button
               key={cat}
               type="button"
@@ -243,7 +285,7 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
         </div>
 
         {/* Status Filter & Search */}
-        <div className="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto min-w-0 overflow-x-auto no-scrollbar scrollbar-none [&::-webkit-scrollbar]:hidden pb-1 md:pb-0 pr-4 md:pr-0">
+        <div className="flex items-center justify-between lg:justify-end gap-2 w-full lg:w-auto min-w-0">
           {/* Status Filter */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-0.5 border border-slate-200 dark:border-slate-800 text-xs shrink-0">
             {['all', 'planned', 'in_progress', 'achieved'].map((status) => (
@@ -263,7 +305,7 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
           </div>
 
           {/* Search Input */}
-          <div className="relative flex-1 sm:w-52 shrink-0 min-w-[130px]">
+          <div className="relative flex-1 sm:w-56 shrink-0 min-w-[120px]">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -284,15 +326,15 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
               <Sparkles className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             </div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-              {milestones.length === 0 ? 'No Commitments Saved Yet' : 'No Matching Commitments'}
+              {totalCount === 0 ? 'No Commitments Saved Yet' : 'No Matching Commitments'}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md font-sans leading-relaxed">
-              {milestones.length === 0
+              {totalCount === 0
                 ? 'Converse with your journal to explore decisions and plan next steps. When a Clarity Card is created, you can save commitments with one click.'
                 : 'Try clearing your active filters or search terms.'}
             </p>
             <div className="flex items-center gap-2 mt-4">
-              {milestones.length === 0 && onInjectDemoData && (
+              {totalCount === 0 && onInjectDemoData && (
                 <button
                   type="button"
                   onClick={onInjectDemoData}
@@ -313,15 +355,22 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredMilestones.map((ms) => {
-              const catStyle = CATEGORY_COLORS[ms.category] || CATEGORY_COLORS.general;
+              const catStyle = CATEGORY_COLORS[ms.category] || CATEGORY_COLORS.personal;
               const sourceSession = ms.extractedFromSessionId
                 ? entries.find((e) => e.id === ms.extractedFromSessionId)
                 : null;
+              const isAchieved = ms.status === 'achieved';
+              const isConfirmingDelete = deleteConfirmId === ms.id;
 
               return (
                 <div
                   key={ms.id}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between group shadow-xs hover:shadow-sm"
+                  id={`commitment-card-${ms.id}`}
+                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between group shadow-xs hover:shadow-sm ${
+                    isAchieved
+                      ? 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-800/60 opacity-85'
+                      : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700'
+                  }`}
                 >
                   <div>
                     {/* Top Row: Category Pill & Status Toggle */}
@@ -334,9 +383,9 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => handleStatusChange(ms.id, ms.status)}
+                        onClick={() => handleStatusCycle(ms.id, ms.status)}
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
-                          ms.status === 'achieved'
+                          isAchieved
                             ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
                             : ms.status === 'in_progress'
                             ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
@@ -344,7 +393,7 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                         }`}
                         title="Click to cycle status (Planned -> In Progress -> Achieved)"
                       >
-                        {ms.status === 'achieved' ? (
+                        {isAchieved ? (
                           <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                         ) : ms.status === 'in_progress' ? (
                           <Clock className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
@@ -356,7 +405,11 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                     </div>
 
                     {/* Title */}
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors leading-snug">
+                    <h3 className={`text-sm font-bold transition-colors leading-snug ${
+                      isAchieved
+                        ? 'text-slate-500 dark:text-slate-400 line-through'
+                        : 'text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300'
+                    }`}>
                       {ms.title}
                     </h3>
 
@@ -368,9 +421,33 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                     )}
                   </div>
 
-                  {/* Footer: Target Timeframe, Source Link, Delete */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                  {/* Actions Row: Mark Complete (Primary), Target Timeframe, Source Link, Demoted Delete */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-2.5">
+                    {/* Primary Action Button: Mark Complete */}
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        id={`complete-commitment-btn-${ms.id}`}
+                        onClick={() => handleToggleComplete(ms.id, ms.status)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-2xs ${
+                          isAchieved
+                            ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'
+                        }`}
+                      >
+                        {isAchieved ? (
+                          <>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Mark Incomplete</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Mark Complete</span>
+                          </>
+                        )}
+                      </button>
+
                       {ms.targetTimeframe && (
                         <span className="text-[11px] font-sans text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/40 flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
@@ -379,27 +456,50 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {sourceSession && (
+                    {/* Bottom Metadata and Demoted Delete */}
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      {sourceSession ? (
                         <button
                           type="button"
                           onClick={() => onSelectEntry(sourceSession.id)}
-                          className="text-[11px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors"
-                          title={`Extracted from reflection: ${sourceSession.title}`}
+                          className="text-[11px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors bg-slate-50 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700/60"
+                          title={`You saved this from a reflection: ${sourceSession.title}`}
                         >
-                          <span className="truncate max-w-[100px]">{sourceSession.title}</span>
-                          <ExternalLink className="w-3 h-3" />
+                          <span className="truncate max-w-[150px]">You saved this from a reflection</span>
+                          <ExternalLink className="w-3 h-3 shrink-0" />
                         </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">Personal Commitment</span>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(ms.id)}
-                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                        title="Delete commitment"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {/* Demoted Delete with Two-Click Confirmation */}
+                      {isConfirmingDelete ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(ms.id)}
+                            className="text-[11px] font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/80 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors"
+                          >
+                            Confirm Delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="text-[11px] text-slate-400 hover:text-slate-600 px-1 py-0.5"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(ms.id)}
+                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors opacity-70 hover:opacity-100"
+                          title="Delete commitment (requires confirmation)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -418,8 +518,14 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
               Add Commitment
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4 font-sans">
-              Formally track an action step, strategic priority, or key milestone.
+              Save a next step you want to remember and return to.
             </p>
+
+            {validationError && (
+              <div className="p-2.5 mb-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs">
+                {validationError}
+              </div>
+            )}
 
             <form onSubmit={handleCreateMilestone} className="space-y-3.5">
               <div>
@@ -429,9 +535,12 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Draft first sprint outline for new dashboard"
+                  placeholder="e.g., Outline my project idea before Friday"
                   value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
+                  onChange={(e) => {
+                    setNewTitle(e.target.value);
+                    if (validationError) setValidationError(null);
+                  }}
                   className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
                 />
               </div>
@@ -446,12 +555,11 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                     onChange={(e) => setNewCategory(e.target.value as MilestoneCategory)}
                     className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 capitalize font-sans"
                   >
-                    <option value="decision">Decision</option>
-                    <option value="idea">Idea</option>
-                    <option value="blocker">Blocker</option>
-                    <option value="learning">Learning</option>
-                    <option value="project">Project</option>
-                    <option value="personal">Personal</option>
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat} className="capitalize">
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -471,11 +579,11 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Context & Next Steps
+                  Notes
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="e.g., Key dependencies, criteria for completion..."
+                  placeholder="Add useful context, motivation, or details..."
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
                   className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-sans"

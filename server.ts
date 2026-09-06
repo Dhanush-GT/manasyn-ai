@@ -1,15 +1,11 @@
 import express, { type Request, type Response } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
@@ -462,7 +458,7 @@ Then, at the very end of your response, ALWAYS output a machine-readable Clarity
   "suggestedNextStep": "One gentle, concrete, actionable step forward to create momentum.",
   "extractedCommitment": {
     "title": "A clear commitment, decision, or milestone if articulated or implied (or null if none)",
-    "category": "project" | "decision" | "idea" | "blocker" | "learning" | "personal" | "general",
+    "category": "personal" | "work" | "study" | "wellbeing" | "relationship" | "decision" | "idea" | "project",
     "targetTimeframe": "e.g. By end of week, Tomorrow, Next month, or Open"
   }
 }
@@ -531,11 +527,11 @@ Focus: Provide a spacious, reflective mirror to quiet mental noise, sort signal 
             extractedCommitment: rawParsed.extractedCommitment && typeof rawParsed.extractedCommitment.title === 'string' && rawParsed.extractedCommitment.title.trim()
               ? {
                   title: rawParsed.extractedCommitment.title.trim().slice(0, 200),
-                  category: ['project', 'decision', 'idea', 'blocker', 'learning', 'personal', 'general', 'infrastructure', 'scaling', 'product', 'architecture', 'operations'].includes(rawParsed.extractedCommitment.category)
+                  category: ['personal', 'work', 'study', 'wellbeing', 'relationship', 'decision', 'idea', 'project'].includes(rawParsed.extractedCommitment.category)
                     ? rawParsed.extractedCommitment.category
-                    : 'project',
+                    : 'personal',
                   targetTimeframe: typeof rawParsed.extractedCommitment.targetTimeframe === 'string' ? rawParsed.extractedCommitment.targetTimeframe.slice(0, 50) : undefined,
-                  notes: 'Extracted from reflection session',
+                  notes: 'Suggested from your reflection',
                 }
               : null,
           };

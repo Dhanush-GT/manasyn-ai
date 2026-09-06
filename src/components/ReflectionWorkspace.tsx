@@ -34,54 +34,46 @@ import { ClarityCardView } from './ClarityCardView';
 import type { UserProfile } from '../types';
 import { auth, saveMilestone } from '../lib/firebase';
 
-const INTENT_ROTATING_PROMPTS: Record<ReflectionMode, string[]> = {
+const INTENT_SUGGESTIONS: Record<ReflectionMode, string[]> = {
   clear_mind: [
-    "What's taking up your mental bandwidth today?",
-    "What felt heavy, tangled, or overwhelming?",
-    "What's one thing you want to let go of or unpack?",
-    "Talk freely... unload whatever thoughts are looping."
+    "What’s taking up the most space in your mind right now?",
+    "What is causing you friction today?",
+    "Just start typing... let it all out."
   ],
   make_decision: [
-    "What conflicting options are you weighing right now?",
-    "What's the worst-case and best-case outcome of each path?",
-    "What does your intuition say before logic steps in?",
-    "What critical piece of information are you missing?"
+    "What decision are you trying to make?",
+    "What is the hardest part of this choice?",
+    "List the pros and cons..."
   ],
   capture_idea: [
-    "Describe the breakthrough or creative spark before it fades...",
-    "What problem does this idea solve, and who needs it?",
-    "What would the most exciting version of this look like?",
-    "What's the very first prototype or experiment you could run?"
+    "What idea do you want to capture before it fades?",
+    "What inspired this concept?",
+    "How would this work in practice?"
   ],
   plan_next_step: [
-    "What is the complex project, and where are you stuck?",
-    "What is the single highest-leverage next action?",
-    "What can you delegate, postpone, or simplify today?",
-    "If you could only finish one thing before tomorrow, what is it?"
+    "What are you trying to move forward?",
+    "What is the immediate next physical action?",
+    "What is blocking your progress?"
   ],
   reflect: [
-    "How are you genuinely feeling at this moment?",
-    "What gave you energy today, and what drained it?",
-    "What is something you learned about yourself recently?",
-    "What are you grateful for right now?"
+    "What’s taking up the most space in your mind right now?",
+    "What is causing you friction today?",
+    "Just start typing... let it all out."
   ],
   brainstorm: [
-    "If there were zero constraints or budget limits, what would you build?",
-    "What are 3 wild, unconventional ways to solve this?",
-    "What would a complete outsider suggest in your situation?",
-    "What assumptions can you invert or challenge?"
+    "What idea do you want to capture before it fades?",
+    "What inspired this concept?",
+    "How would this work in practice?"
   ],
   summarize: [
-    "What were the core takeaways from your recent work?",
-    "How would you explain the situation in 3 sentences?",
-    "What patterns emerged across your reflections?",
-    "What is the executive summary of your current progress?"
+    "What are you trying to move forward?",
+    "What is the immediate next physical action?",
+    "What is blocking your progress?"
   ],
   action_items: [
-    "What concrete deliverables need to be finalized this week?",
-    "Who needs to be contacted, informed, or aligned with?",
-    "What blocking dependency must be resolved first?",
-    "What is your commitment for today?"
+    "What are you trying to move forward?",
+    "What is the immediate next physical action?",
+    "What is blocking your progress?"
   ],
 };
 
@@ -113,7 +105,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(entry?.title || 'Untitled Reflection');
   const [milestoneNotification, setMilestoneNotification] = useState<{ title: string; count: number } | null>(null);
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
 
   // Web Speech API State
   const [isListening, setIsListening] = useState(false);
@@ -121,16 +113,10 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
 
-  // Rotating placeholder interval effect (rotates every 4s when user is not typing)
-  useEffect(() => {
-    if (inputText.trim() !== '' || isListening) return;
-
-    const interval = setInterval(() => {
-      setPlaceholderIndex((prev) => prev + 1);
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [inputText, isListening, mode]);
+  const handleNextSuggestion = () => {
+    const list = INTENT_SUGGESTIONS[mode] || INTENT_SUGGESTIONS.clear_mind;
+    setSuggestionIndex((prev) => (prev + 1) % list.length);
+  };
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -366,7 +352,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       title: draft.title,
       category: draft.category || 'project',
       targetTimeframe: draft.targetTimeframe,
-      notes: draft.notes || `Extracted from reflection "${entry.title}"`,
+      notes: draft.notes || 'You saved this from a reflection',
       status: 'planned' as const,
       extractedFromSessionId: entry.id,
       createdAt: new Date().toISOString(),
@@ -480,28 +466,24 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
     });
   };
 
-  // Dynamic mode-specific placeholder rotating through prompts
-  const getDynamicPlaceholder = () => {
-    if (isListening) return "Listening to your thoughts... speak freely";
-    const prompts = INTENT_ROTATING_PROMPTS[mode] || INTENT_ROTATING_PROMPTS.clear_mind;
-    return prompts[placeholderIndex % prompts.length];
-  };
+  const currentSuggestions = INTENT_SUGGESTIONS[mode] || INTENT_SUGGESTIONS.clear_mind;
+  const currentSuggestion = currentSuggestions[suggestionIndex % currentSuggestions.length];
 
   return (
     <div id="reflection-workspace" className="flex-1 flex flex-col min-h-[calc(100vh-16rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden relative w-full max-w-5xl mx-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-      {/* Milestone Extraction Toast Notification */}
+      {/* Commitment Saved Toast Notification */}
       {milestoneNotification && (
-        <div id="milestone-extracted-toast" className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 border-b border-purple-500/40 px-4 py-2 flex items-center justify-between text-xs text-purple-200 shrink-0">
+        <div id="milestone-extracted-toast" className="bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-950 border-b border-indigo-500/40 px-4 py-2 flex items-center justify-between text-xs text-indigo-200 shrink-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+            <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
             <span>
-              <strong>Strategic Milestone Harvested:</strong> &ldquo;{milestoneNotification.title}&rdquo; {milestoneNotification.count > 1 ? `(+${milestoneNotification.count - 1} more)` : ''} &bull; Persisted to your Milestones Tracker.
+              <strong>Commitment Saved:</strong> &ldquo;{milestoneNotification.title}&rdquo; &bull; Added to your Commitments.
             </span>
           </div>
           <button
             type="button"
             onClick={() => setMilestoneNotification(null)}
-            className="text-purple-400 hover:text-white text-xs font-semibold ml-3"
+            className="text-indigo-400 hover:text-white text-xs font-semibold ml-3"
           >
             Dismiss
           </button>
@@ -536,47 +518,28 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
             </h1>
           )}
 
-          {/* Location & Metadata Pill Bar */}
+          {/* Timestamp and optional Attached Location display */}
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <span className="text-[11px] text-slate-400 flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {new Date(entry.updatedAt || entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
 
-            {/* Location Tag Pill */}
-            {entry.location ? (
-              <div className="inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                <button
-                  id="location-tag-pill"
-                  type="button"
-                  onClick={() => onOpenLocations?.(entry.id)}
-                  className="inline-flex items-center gap-1.5 hover:underline truncate max-w-[150px]"
-                  title="View or change location in full-page Locations view"
-                >
-                  <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
-                  <span className="truncate">{entry.location.placeName}</span>
-                </button>
+            {/* Attached Location Tag (subtle pill) */}
+            {entry.location && (
+              <div className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
+                <span className="truncate max-w-[140px]">{entry.location.placeName}</span>
                 <button
                   type="button"
                   onClick={() => handleSelectLocation(undefined)}
-                  className="p-0.5 text-indigo-400 hover:text-rose-500 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
+                  className="p-0.5 text-indigo-400 hover:text-rose-500 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors ml-0.5"
                   title="Remove location tag"
                   aria-label="Remove location tag"
                 >
                   <X className="w-3 h-3" />
                 </button>
               </div>
-            ) : (
-              <button
-                id="add-location-btn"
-                type="button"
-                onClick={() => onOpenLocations?.(entry.id)}
-                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 transition-colors"
-                title="Tag location on full-page map"
-              >
-                <MapPin className="w-3 h-3" />
-                <span>Tag Location</span>
-              </button>
             )}
 
             {/* Webhook export status */}
@@ -589,46 +552,48 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Connections (Share / Webhook) */}
-          <button
-            id="workspace-export-webhook-btn"
-            type="button"
-            onClick={() => setIsWebhookModalOpen(true)}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors"
-            title="Connections: Share selected insights with connected apps"
-          >
-            <Share2 className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="hidden sm:inline">Connections</span>
-          </button>
+        {/* Action Controls - Rendered ONLY after the first message is sent */}
+        {entry.messages.length > 0 && (
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 animate-in fade-in">
+            {/* Connections (Share / Webhook) */}
+            <button
+              id="workspace-export-webhook-btn"
+              type="button"
+              onClick={() => setIsWebhookModalOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors"
+              title="Connections: Share selected insights with connected apps"
+            >
+              <Share2 className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden sm:inline">Connections</span>
+            </button>
 
-          {/* Pin Button */}
-          <button
-            id="pin-entry-btn"
-            type="button"
-            onClick={handleTogglePin}
-            className={`p-2 rounded-lg border transition-colors ${
-              entry.isPinned
-                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-            title={entry.isPinned ? 'Unpin reflection' : 'Pin reflection'}
-          >
-            {entry.isPinned ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-          </button>
+            {/* Pin Button */}
+            <button
+              id="pin-entry-btn"
+              type="button"
+              onClick={handleTogglePin}
+              className={`p-2 rounded-lg border transition-colors ${
+                entry.isPinned
+                  ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+              title={entry.isPinned ? 'Unpin reflection' : 'Pin reflection'}
+            >
+              {entry.isPinned ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+            </button>
 
-          {/* Delete Button */}
-          <button
-            id="delete-entry-btn"
-            type="button"
-            onClick={() => onDeleteEntry(entry.id)}
-            className="p-2 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-            title="Delete this reflection"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+            {/* Delete Button */}
+            <button
+              id="delete-entry-btn"
+              type="button"
+              onClick={() => onDeleteEntry(entry.id)}
+              className="p-2 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+              title="Delete this reflection"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tags Bar */}
@@ -665,7 +630,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
         {/* Quick Suggestion Chips */}
         <div className="hidden sm:flex items-center gap-1 ml-auto pl-2 border-l border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 shrink-0">
           <span className="text-slate-400 font-sans">Quick:</span>
-          {['decision', 'idea', 'blocker', 'learning', 'project'].map((quickTag) => {
+          {['personal', 'decision', 'idea', 'growth', 'work', 'study'].map((quickTag) => {
             const isAdded = entry.tags.includes(quickTag);
             return (
               <button
@@ -687,17 +652,17 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       </div>
 
       {/* Chat / Multi-Turn Reflection Messages Stream */}
-      <div id="messages-container" className="flex-1 overflow-y-auto pb-44 p-4 sm:p-6 space-y-6">
+      <div id="messages-container" className="flex-1 overflow-y-auto pb-48 p-4 sm:p-6 space-y-6">
         {entry.messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12">
             <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-md">
               <Sparkles className="w-7 h-7" />
             </div>
             <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white font-display">
-              Talk freely. Find clarity. Move forward.
+              What&apos;s on your mind?
             </h3>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed font-sans max-w-md">
-              Clear your mind, make a tough decision, capture an idea, or plan your next step. Manasyn brings calm structure to your raw reflections.
+              Speak or write freely. You don’t need to organize it first.
             </p>
           </div>
         ) : (
@@ -727,7 +692,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                       {msg.mode === 'clear_mind' ? 'Clear my mind' :
                        msg.mode === 'make_decision' ? 'Make a decision' :
                        msg.mode === 'capture_idea' ? 'Capture an idea' :
-                       msg.mode === 'plan_next_step' ? 'Plan next step' :
+                       msg.mode === 'plan_next_step' ? 'Plan next steps' :
                        msg.mode.replace('_', ' ')}
                     </span>
                   )}
@@ -788,10 +753,10 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       </div>
 
       {/* Mode Selector and Prompt Input Bar - Fixed to bottom viewport directly above Bottom Navbar */}
-      <div className="fixed bottom-20 inset-x-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-4 pt-2 shadow-lg">
+      <div className="fixed bottom-20 inset-x-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-3 pt-2 shadow-lg">
         <div className="max-w-5xl mx-auto w-full px-3 sm:px-6">
-          {/* Reflection Conversational Intent Chips - Swipeable Horizontal Row */}
-          <div className="flex flex-row overflow-x-auto overscroll-x-contain touch-pan-x scrollbar-hide w-full gap-3 px-4 mb-2">
+          {/* Reflection Conversational Intent Chips - Swipeable Horizontal Row with mobile overflow safety */}
+          <div className="flex flex-row items-center overflow-x-auto touch-pan-x scrollbar-hide w-full gap-2 px-1 sm:px-0 pr-8 mb-2 max-w-full select-none">
             <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 min-w-max self-center mr-0.5 select-none">
               Intent:
             </span>
@@ -799,7 +764,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
               { id: 'clear_mind' as ReflectionMode, label: 'Clear my mind', icon: Sparkles },
               { id: 'make_decision' as ReflectionMode, label: 'Make a decision', icon: Target },
               { id: 'capture_idea' as ReflectionMode, label: 'Capture an idea', icon: Lightbulb },
-              { id: 'plan_next_step' as ReflectionMode, label: 'Plan next step', icon: ArrowRight },
+              { id: 'plan_next_step' as ReflectionMode, label: 'Plan next steps', icon: ArrowRight },
             ].map((item) => {
               const Icon = item.icon;
               const isSelected = mode === item.id;
@@ -810,7 +775,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                   type="button"
                   onClick={() => {
                     setMode(item.id);
-                    setPlaceholderIndex(0);
+                    setSuggestionIndex(0);
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 min-w-max whitespace-nowrap font-sans select-none ${
                     isSelected
@@ -823,6 +788,24 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                 </button>
               );
             })}
+          </div>
+
+          {/* New Suggestion UI: Placed directly above the chat input container */}
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5 px-1 font-sans">
+            <div className="truncate flex-1 mr-2 flex items-center gap-1.5 min-w-0">
+              <span className="text-slate-400 dark:text-slate-500 shrink-0">Need a starting point?</span>
+              <span className="text-slate-700 dark:text-slate-300 font-medium truncate select-text">
+                &ldquo;{currentSuggestion}&rdquo;
+              </span>
+            </div>
+            <button
+              type="button"
+              id="cycle-suggestion-btn"
+              onClick={handleNextSuggestion}
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline font-semibold shrink-0 cursor-pointer flex items-center gap-0.5"
+            >
+              <span>• Another idea</span>
+            </button>
           </div>
 
           {/* Input Text Form */}
@@ -869,33 +852,51 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                     handleSendMessage();
                   }
                 }}
-                placeholder={getDynamicPlaceholder()}
-                className={`w-full resize-none rounded-xl p-2.5 sm:p-3 pr-10 text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border ${
+                placeholder="Talk or write freely..."
+                className={`w-full resize-none rounded-xl p-2.5 sm:p-3 pr-20 text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border ${
                   isListening 
                     ? 'border-rose-500 ring-2 ring-rose-500/30' 
                     : 'border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
                 } text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none max-h-32 font-sans`}
               />
 
-              {/* Voice Dictation Toggle Button inside textarea */}
-              <button
-                id="voice-dictation-btn"
-                type="button"
-                onClick={toggleListening}
-                title={isListening ? "Stop Voice Dictation" : isSpeechSupported ? "Start Voice Dictation" : "Voice dictation not supported in browser"}
-                disabled={!isSpeechSupported}
-                className={`absolute right-2.5 bottom-2.5 p-1.5 rounded-lg transition-all ${
-                  isListening
-                    ? 'bg-rose-600 text-white animate-bounce shadow-md'
-                    : 'text-slate-400 hover:text-indigo-400 hover:bg-slate-800'
-                } ${!isSpeechSupported ? 'opacity-30 cursor-not-allowed' : ''}`}
-              >
-                {isListening ? (
-                  <MicOff className="w-4 h-4" />
-                ) : (
-                  <Mic className="w-4 h-4" />
-                )}
-              </button>
+              {/* Action Buttons inside textarea: Location Tag and Voice Dictation */}
+              <div className="absolute right-2.5 bottom-2.5 flex items-center gap-1">
+                {/* Subtle Location Tag Button */}
+                <button
+                  id="input-location-tag-btn"
+                  type="button"
+                  onClick={() => onOpenLocations?.(entry.id)}
+                  title={entry.location ? `Tagged location: ${entry.location.placeName}` : "Tag location"}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    entry.location
+                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60'
+                      : 'text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <MapPin className="w-4 h-4" />
+                </button>
+
+                {/* Voice Dictation Toggle Button */}
+                <button
+                  id="voice-dictation-btn"
+                  type="button"
+                  onClick={toggleListening}
+                  title={isListening ? "Stop Voice Dictation" : isSpeechSupported ? "Start Voice Dictation" : "Voice dictation not supported in browser"}
+                  disabled={!isSpeechSupported}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    isListening
+                      ? 'bg-rose-600 text-white animate-bounce shadow-md'
+                      : 'text-slate-400 hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                  } ${!isSpeechSupported ? 'opacity-30 cursor-not-allowed' : ''}`}
+                >
+                  {isListening ? (
+                    <MicOff className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button
