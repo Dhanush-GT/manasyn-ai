@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Hardened helper primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User data isolation: each user can only read and write their own documents
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /interactions/{interactionId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /milestones/{milestoneId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /webhookConfigs/{configId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /entries/{entryId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Feedback collection: authenticated users can submit feedback; only admins can read or delete
+    match /feedback/{feedbackId} {
+      allow create: if isSignedIn();
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // RBAC: Admins collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow write: if false; // Managed via server/console
+    }
+
+    // System security audit logs: readable only by authenticated designated admins
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Immutable audit trail
+    }
+  }
+}

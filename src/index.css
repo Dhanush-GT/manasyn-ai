@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --color-manasyn-indigo: #6257D9;
+  --color-manasyn-teal: #3FA99B;
+  --color-manasyn-dark: #17182B;
+  --color-manasyn-secondary: #65677A;
+  --color-manasyn-bg: #F7F8FC;
+  --color-manasyn-border: #E4E6EF;
+  --color-manasyn-success: #2F8F79;
+  --color-manasyn-warning: #C98424;
+  --color-manasyn-error: #C94A5A;
+}
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+  font-family: var(--font-sans);
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#root {
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+  min-height: 100%;
+}
+
+.dark body {
+  background-color: #020617;
+  color: #f8fafc;
+}
+
+/* Hide scrollbar utility for clean single-line scrolling rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

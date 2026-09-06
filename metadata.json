@@ -1,0 +1,6 @@
+{
+  "name": "Manasyn",
+  "description": "Talk freely. Find clarity. Move forward. A voice-first Personal Gemini Journal for busy-minded non-journalers to talk through thoughts, connect memories, and recognize patterns.",
+  "requestFramePermissions": ["geolocation", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

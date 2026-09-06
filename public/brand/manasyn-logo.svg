@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="100%" height="100%" fill="none">
+  <defs>
+    <mask id="manasyn-full-mask">
+      <rect width="120" height="120" fill="white" />
+      <path
+        d="M 42 50 C 38 60, 46 74, 56 72 L 68 20 C 72 10, 84 10, 88 20 L 92 56"
+        stroke="black"
+        stroke-width="18"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </mask>
+  </defs>
+  <g transform="translate(15, 10)">
+    <!-- Purple/Indigo Arch with transparent mask -->
+    <path
+      d="M 18 78 L 38 20 C 42 10, 54 10, 58 20 L 70 56 C 73 65, 65 74, 56 72 C 48 70, 44 60, 48 50"
+      stroke="#5A4CE3"
+      stroke-width="12"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      mask="url(#manasyn-full-mask)"
+    />
+    <!-- Teal Arch -->
+    <path
+      d="M 42 50 C 38 60, 46 74, 56 72 L 68 20 C 72 10, 84 10, 88 20 L 92 56"
+      stroke="#2CB59B"
+      stroke-width="12"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+  <text x="145" y="72" font-family="'Manrope', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="52" font-weight="700" fill="#17182B" letter-spacing="-1">Manasyn</text>
+</svg>

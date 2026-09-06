@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "Interaction": {
+      "title": "Interaction",
+      "description": "A user-isolated reflection journal interaction with Gemini multi-turn messages and optional location tag.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the interaction" },
+        "userId": { "type": "string", "description": "UID of the owner user" },
+        "title": { "type": "string", "description": "Title of the reflection entry" },
+        "createdAt": { "type": "string", "description": "ISO timestamp when entry was created" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp when entry was last updated" },
+        "messages": { "type": "array", "description": "List of multi-turn chat messages between user and Gemini" },
+        "tags": { "type": "array", "description": "Array of user-defined tags" },
+        "summary": { "type": "string", "description": "Optional AI or user summary" },
+        "isPinned": { "type": "boolean", "description": "Whether the entry is pinned in the list" },
+        "location": { "type": "object", "description": "Optional tagged place with coordinates and place name" },
+        "webhookExportedAt": { "type": "string", "description": "Optional timestamp of last external dispatch" }
+      },
+      "required": ["id", "userId", "title", "createdAt", "updatedAt", "messages"]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Designated administrator profile for RBAC access.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID of the administrator" },
+        "email": { "type": "string", "description": "Email address of the administrator" },
+        "role": { "type": "string", "description": "Administrative role (e.g., admin, superadmin)" },
+        "grantedAt": { "type": "string", "description": "ISO timestamp when access was granted" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "WebhookConfig": {
+      "title": "WebhookConfig",
+      "description": "User configuration for external webhook dispatch destinations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID of the webhook configuration" },
+        "userId": { "type": "string", "description": "UID of the owning user" },
+        "targetType": { "type": "string", "enum": ["slack", "discord", "custom_json", "email_digest"], "description": "Target service" },
+        "webhookUrl": { "type": "string", "description": "Endpoint URL where summaries are dispatched" },
+        "isEnabled": { "type": "boolean", "description": "Whether automated summary dispatch is enabled" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of configuration creation" },
+        "lastDispatchedAt": { "type": "string", "description": "ISO timestamp of last successful dispatch" }
+      },
+      "required": ["id", "userId", "targetType", "webhookUrl", "isEnabled"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Security and system audit log events.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique audit log entry ID" },
+        "action": { "type": "string", "description": "Security action performed" },
+        "performedBy": { "type": "string", "description": "User UID or system actor" },
+        "targetType": { "type": "string", "description": "Type of resource touched" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of the event" },
+        "status": { "type": "string", "description": "Success or Failure status" }
+      },
+      "required": ["id", "action", "performedBy", "timestamp", "status"]
+    },
+    "Milestone": {
+      "title": "Milestone",
+      "description": "Autonomous strategic ambitions, goals, and technical milestones extracted from user reflections.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the milestone" },
+        "userId": { "type": "string", "description": "UID of the owner user" },
+        "title": { "type": "string", "description": "Title of the goal or ambition" },
+        "category": { "type": "string", "description": "Category (e.g., infrastructure, scaling, product, architecture, personal, operations)" },
+        "targetTimeframe": { "type": "string", "description": "Target timeframe or horizon, e.g., Q3 2026" },
+        "status": { "type": "string", "enum": ["planned", "in_progress", "achieved"], "description": "Progress state" },
+        "extractedFromSessionId": { "type": "string", "description": "Optional session ID where this was synthesized" },
+        "notes": { "type": "string", "description": "Contextual notes or actionable signals" },
+        "createdAt": { "type": "string", "description": "ISO timestamp when milestone was created" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp when milestone was updated" }
+      },
+      "required": ["id", "userId", "title", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/interactions/{interactionId}": {
+      "schema": "Interaction",
+      "description": "User-isolated multi-turn reflection journals and Gemini conversation history."
+    },
+    "/users/{userId}/milestones/{milestoneId}": {
+      "schema": "Milestone",
+      "description": "User-isolated autonomous dreams, ambitions, and operational milestones."
+    },
+    "/users/{userId}/webhookConfigs/{configId}": {
+      "schema": "WebhookConfig",
+      "description": "User-specific external webhook destinations for reflection summaries."
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminProfile",
+      "description": "RBAC collection of validated system administrator identities."
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "System-wide immutable security audit log events for administrative monitoring."
+    }
+  }
+}

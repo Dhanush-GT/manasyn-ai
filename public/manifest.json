@@ -1,0 +1,21 @@
+{
+  "name": "Manasyn — Personal Gemini Journal",
+  "short_name": "Manasyn",
+  "description": "Talk freely. Find clarity. Move forward. A voice-first Personal Gemini Journal for busy-minded non-journalers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17182B",
+  "theme_color": "#17182B",
+  "icons": [
+    {
+      "src": "/brand/manasyn-symbol-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/manasyn-symbol-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

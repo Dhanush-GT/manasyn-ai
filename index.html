@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manasyn — Talk freely. Find clarity. Move forward.</title>
+    <meta name="description" content="Talk freely. Find clarity. Move forward. A voice-first Personal Gemini Journal for busy-minded non-journalers." />
+    <meta property="og:title" content="Manasyn — Talk freely. Find clarity. Move forward." />
+    <meta property="og:description" content="Talk freely. Find clarity. Move forward. A voice-first Personal Gemini Journal for busy-minded non-journalers." />
+    <meta property="og:image" content="/brand/manasyn-symbol-512.png" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Manasyn — Personal Gemini Journal" />
+    <meta name="twitter:description" content="Talk freely. Find clarity. Move forward. A voice-first Personal Gemini Journal for busy-minded non-journalers." />
+    <meta name="theme-color" content="#17182B" />
+    <link rel="icon" type="image/svg+xml" href="/brand/manasyn-symbol.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme');
+          if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
