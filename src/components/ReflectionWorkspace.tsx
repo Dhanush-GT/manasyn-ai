@@ -725,13 +725,13 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                   className={`flex gap-3 sm:gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {!isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-1">
+                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-0.5 z-10 focus:outline-none select-none">
                       <ManasynLogo size={20} variant="symbol" />
                     </div>
                   )}
 
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 text-xs sm:text-sm leading-relaxed shadow-sm min-w-0 break-words ${
+                    className={`max-w-[85%] md:max-w-3xl rounded-2xl p-4 text-xs sm:text-sm leading-relaxed shadow-xs min-w-0 break-words ${
                       isUser
                         ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-br-xs'
                         : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-bl-xs border border-slate-200 dark:border-slate-800'
@@ -771,7 +771,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                   </div>
 
                   {isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center shrink-0 shadow-sm mt-1">
+                    <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center shrink-0 shadow-xs mt-0.5 z-10 focus:outline-none select-none">
                       <UserIcon className="w-4 h-4" />
                     </div>
                   )}
@@ -781,12 +781,12 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
           )}
 
           {isAiLoading && (
-            <div className="flex gap-3 sm:gap-4 justify-start animate-in fade-in">
-              <div className="w-8 h-8 rounded-xl bg-slate-900 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-sm">
-                <Cpu className="w-4 h-4 animate-spin text-indigo-400" />
+            <div id="ai-loading-indicator" className="flex flex-row items-start gap-3 sm:gap-4 justify-start animate-in fade-in">
+              <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-0.5 z-10 focus:outline-none select-none">
+                <Cpu className="w-4 h-4 animate-spin text-indigo-500 dark:text-indigo-400" />
               </div>
-              <div className="bg-slate-900 rounded-2xl rounded-bl-xs p-4 border border-slate-800 text-xs sm:text-sm text-slate-400 flex items-center gap-2 font-sans">
-                <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+              <div className="max-w-[85%] md:max-w-3xl rounded-2xl rounded-bl-xs p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2 font-sans shadow-xs min-w-0">
+                <Sparkles className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-pulse shrink-0" />
                 <span>Reflecting and structuring your thoughts...</span>
               </div>
             </div>
