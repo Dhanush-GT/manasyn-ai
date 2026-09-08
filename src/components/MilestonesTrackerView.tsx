@@ -173,30 +173,30 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
   };
 
   return (
-    <div id="milestones-tracker-view" className="flex-1 flex flex-col h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-y-auto pb-28 md:pb-6">
+    <div id="milestones-tracker-view" className="flex-1 flex flex-col w-full max-w-full overflow-x-hidden box-border bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-28 md:pb-6">
       {/* Header Banner */}
-      <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shrink-0">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs">
+      <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shrink-0 w-full max-w-full box-border">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 w-full min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs shrink-0">
                 <Target className="w-5 h-5" />
               </div>
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white font-display flex items-center gap-2 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white font-display flex items-center gap-2 flex-wrap min-w-0 break-words">
                   <span>Commitments</span>
-                  <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80">
+                  <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 shrink-0">
                     CHOSEN FROM REFLECTIONS
                   </span>
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-0.5 break-words">
                   Keep track of the next steps you choose during your reflections.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
             {totalCount === 0 && onInjectDemoData && (
               <button
                 id="milestones-inject-demo-btn"
@@ -216,7 +216,7 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
                 setValidationError(null);
                 setIsAddModalOpen(true);
               }}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors flex items-center gap-1.5 shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>Add Commitment</span>
@@ -225,43 +225,43 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
         </div>
 
         {/* Metrics Strip */}
-        <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs">
-            <div>
-              <p className="text-[11px] font-sans uppercase text-slate-500 dark:text-slate-400">Total Tracked</p>
+        <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mt-4 sm:mt-5 w-full min-w-0">
+          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs min-w-0">
+            <div className="min-w-0">
+              <p className="text-[11px] font-sans uppercase text-slate-500 dark:text-slate-400 truncate">Total Tracked</p>
               <p className="text-xl font-extrabold text-slate-900 dark:text-white font-display mt-0.5">{totalCount}</p>
             </div>
-            <Layers className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+            <Layers className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0 ml-1" />
           </div>
 
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs">
-            <div>
-              <p className="text-[11px] font-sans uppercase text-indigo-600 dark:text-indigo-300">In Progress</p>
+          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs min-w-0">
+            <div className="min-w-0">
+              <p className="text-[11px] font-sans uppercase text-indigo-600 dark:text-indigo-300 truncate">In Progress</p>
               <p className="text-xl font-extrabold text-indigo-600 dark:text-indigo-300 font-display mt-0.5">{inProgressCount}</p>
             </div>
-            <Clock className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+            <Clock className="w-5 h-5 text-indigo-500 dark:text-indigo-400 shrink-0 ml-1" />
           </div>
 
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs">
-            <div>
-              <p className="text-[11px] font-sans uppercase text-emerald-600 dark:text-emerald-300">Achieved</p>
+          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs min-w-0">
+            <div className="min-w-0">
+              <p className="text-[11px] font-sans uppercase text-emerald-600 dark:text-emerald-300 truncate">Achieved</p>
               <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-300 font-display mt-0.5">{achievedCount}</p>
             </div>
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400 shrink-0 ml-1" />
           </div>
 
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs">
-            <div>
-              <p className="text-[11px] font-sans uppercase text-purple-600 dark:text-purple-300">Completion Rate</p>
+          <div className="p-3 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs min-w-0">
+            <div className="min-w-0">
+              <p className="text-[11px] font-sans uppercase text-purple-600 dark:text-purple-300 truncate">Completion</p>
               <p className="text-xl font-extrabold text-purple-600 dark:text-purple-300 font-display mt-0.5">{completionRate}%</p>
             </div>
-            <TrendingUp className="w-5 h-5 text-purple-500 dark:text-purple-400" />
+            <TrendingUp className="w-5 h-5 text-purple-500 dark:text-purple-400 shrink-0 ml-1" />
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar: Mobile optimized with responsive wrapping and smooth scrolling */}
-      <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0 w-full min-w-0 max-w-full">
+      <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0 w-full min-w-0 max-w-full box-border">
         {/* Category Filter Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none [&::-webkit-scrollbar]:hidden w-full lg:w-auto min-w-0 pb-1 lg:pb-0 shrink-0">
           <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1 shrink-0 font-medium">
@@ -285,9 +285,9 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
         </div>
 
         {/* Status Filter & Search */}
-        <div className="flex items-center justify-between lg:justify-end gap-2 w-full lg:w-auto min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between lg:justify-end gap-2 w-full lg:w-auto min-w-0">
           {/* Status Filter */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-0.5 border border-slate-200 dark:border-slate-800 text-xs shrink-0">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-0.5 border border-slate-200 dark:border-slate-800 text-xs shrink-0 overflow-x-auto no-scrollbar max-w-full">
             {['all', 'planned', 'in_progress', 'achieved'].map((status) => (
               <button
                 key={status}
@@ -305,7 +305,7 @@ export const MilestonesTrackerView: React.FC<MilestonesTrackerViewProps> = ({
           </div>
 
           {/* Search Input */}
-          <div className="relative flex-1 sm:w-56 shrink-0 min-w-[120px]">
+          <div className="relative w-full sm:w-56 shrink-0 min-w-0">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"

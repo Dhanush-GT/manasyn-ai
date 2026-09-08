@@ -6,6 +6,7 @@ import {
   Plus
 } from 'lucide-react';
 import { ManasynLogo } from './ManasynLogo';
+import { PWAInstallButton } from './PWAInstallButton';
 import type { UserProfile, AppView } from '../types';
 
 interface NavbarProps {
@@ -61,8 +62,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Right: + New Reflection Button (Desktop) & Theme Toggle */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      {/* Right: Install App Button, + New Reflection Button (Desktop) & Theme Toggle */}
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <PWAInstallButton compact />
+
         {user && onNewEntry && (
           <button
             id="header-new-reflection-btn"

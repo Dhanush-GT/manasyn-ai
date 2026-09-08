@@ -115,6 +115,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
+  const finalSpeechTextRef = useRef('');
 
   const handleNextSuggestion = () => {
     const list = INTENT_SUGGESTIONS[mode] || INTENT_SUGGESTIONS.clear_mind;
@@ -144,7 +145,11 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   const toggleListening = () => {
     if (isListening) {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignore if already stopped
+        }
       }
       setIsListening(false);
       return;
@@ -165,28 +170,49 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       recognition.interimResults = true;
       recognition.lang = navigator.language || 'en-US';
 
-      let baseText = inputText;
-
       recognition.onstart = () => {
         setIsListening(true);
         setSpeechError(null);
-        baseText = inputText.trim() ? `${inputText.trim()} ` : '';
+        finalSpeechTextRef.current = inputText.trim() ? `${inputText.trim()} ` : '';
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let interimTranscript = '';
+        let newFinalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcriptSegment = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            newFinalTranscript += transcriptSegment + ' ';
+          } else {
+            interimTranscript += transcriptSegment;
+          }
         }
-        setInputText(baseText + transcript);
+
+        if (newFinalTranscript) {
+          finalSpeechTextRef.current += newFinalTranscript;
+        }
+
+        const combined = `${finalSpeechTextRef.current}${interimTranscript}`.trimStart();
+        setInputText(combined);
       };
 
       recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          setSpeechError('Microphone access denied. Please allow microphone permissions in browser settings.');
-        } else if (event.error !== 'no-speech') {
-          setSpeechError(`Voice input: ${event.error}`);
+        const errType = event?.error;
+        // Expected non-fatal events when speech stops or user stays silent:
+        if (errType === 'aborted' || errType === 'no-speech') {
+          setIsListening(false);
+          return;
+        }
+
+        if (errType === 'not-allowed' || errType === 'service-not-allowed') {
+          setSpeechError('Microphone access denied. Please allow microphone permissions in your browser settings.');
+        } else if (errType === 'audio-capture') {
+          setSpeechError('No microphone was detected. Please verify your audio input device.');
+        } else if (errType === 'network') {
+          setSpeechError('Speech recognition network issue. Please check your internet connection.');
+        } else {
+          setSpeechError(`Voice input issue: ${errType || 'Unable to process speech'}`);
         }
         setIsListening(false);
       };
@@ -198,7 +224,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err: unknown) {
-      console.error('Failed to initialize speech recognition:', err);
+      console.warn('Failed to initialize speech recognition:', err);
       setSpeechError('Failed to start microphone.');
       setIsListening(false);
     }
@@ -208,7 +234,11 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignore
+        }
       }
     };
   }, [entry?.id]);
@@ -814,10 +844,10 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
           </div>
 
           {/* New Suggestion UI: Placed directly above the chat input container */}
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5 px-1 font-sans">
-            <div className="truncate flex-1 mr-2 flex items-center gap-1.5 min-w-0">
-              <span className="text-slate-400 dark:text-slate-500 shrink-0">Need a starting point?</span>
-              <span className="text-slate-700 dark:text-slate-300 font-medium truncate select-text">
+          <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5 px-1 font-sans gap-y-1">
+            <div className="flex-1 mr-2 flex flex-wrap items-center gap-1.5 min-w-0">
+              <span className="text-slate-400 dark:text-slate-500 shrink-0 text-xs font-medium">Need a starting point?</span>
+              <span className="text-slate-700 dark:text-slate-300 font-medium text-xs break-words whitespace-normal select-text">
                 &ldquo;{currentSuggestion}&rdquo;
               </span>
             </div>

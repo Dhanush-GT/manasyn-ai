@@ -24,8 +24,10 @@ import {
   ExternalLink,
   Sparkles,
   HelpCircle,
-  RefreshCw
+  RefreshCw,
+  Smartphone
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 import type { 
   UserProfile, 
   ThemeSetting, 
@@ -879,7 +881,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </section>
 
-        {/* 5. Support & Diagnostics (with safe Copy support ID) */}
+        {/* 5. Progressive Web App Installation */}
+        <section 
+          id="pwa-install-settings-card"
+          className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3"
+        >
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 font-sans border-b border-slate-200 dark:border-slate-800 pb-3">
+            <Smartphone className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>App Installation</span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Standalone App Experience</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
+                Install Manasyn directly to your home screen or dock for quick distraction-free reflections and offline access.
+              </p>
+            </div>
+
+            <div className="shrink-0">
+              <PWAInstallButton />
+            </div>
+          </div>
+        </section>
+
+        {/* 6. Support & Diagnostics (with safe Copy support ID) */}
         <section 
           id="help-and-support-card"
           className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3"

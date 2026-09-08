@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   APIProvider, 
-  Map, 
+  Map as GoogleMap, 
   Marker, 
   InfoWindow 
 } from '@vis.gl/react-google-maps';
@@ -438,7 +438,7 @@ const GoogleMapWithMarkers: React.FC<GoogleMapWithMarkersProps> = ({
   onAuthFailure,
 }) => {
   return (
-    <Map
+    <GoogleMap
       id="places-google-map"
       mapId={GMP_ATTRIBUTION_ID}
       defaultCenter={center}
@@ -480,7 +480,7 @@ const GoogleMapWithMarkers: React.FC<GoogleMapWithMarkersProps> = ({
           </div>
         </InfoWindow>
       )}
-    </Map>
+    </GoogleMap>
   );
 };
 
@@ -529,18 +529,25 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
     const unsubscribe = subscribeUserPlaces(
       user.uid,
       (remotePlaces) => {
-        if (remotePlaces && remotePlaces.length > 0) {
-          // Merge presets and remote places uniquely
-          const combined = [...remotePlaces];
-          DEFAULT_PRESET_PLACES.forEach((preset) => {
-            if (!combined.some((p) => p.placeName.toLowerCase() === preset.placeName.toLowerCase())) {
-              combined.push(preset);
-            }
-          });
-          setUserPlaces(combined);
-        } else {
-          setUserPlaces(DEFAULT_PRESET_PLACES);
-        }
+        const placeMap = new Map<string, LocationTag>();
+        (remotePlaces || []).forEach((p) => {
+          const nameKey = (p.placeName || '').trim().toLowerCase();
+          const idKey = (p.id || '').trim().toLowerCase();
+          if (nameKey) {
+            placeMap.set(nameKey, p);
+          } else if (idKey) {
+            placeMap.set(idKey, p);
+          }
+        });
+
+        DEFAULT_PRESET_PLACES.forEach((preset) => {
+          const key = preset.placeName.trim().toLowerCase();
+          if (!placeMap.has(key)) {
+            placeMap.set(key, preset);
+          }
+        });
+
+        setUserPlaces(Array.from(placeMap.values()));
       },
       (err) => {
         console.warn('[Places] Falling back to default preset places:', err);
@@ -582,9 +589,21 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
     ).length;
   };
 
+  // Deduplicated places list (by normalized placeName or ID)
+  const deduplicatedPlaces = useMemo(() => {
+    const map = new Map<string, LocationTag>();
+    userPlaces.forEach((p) => {
+      const key = (p.placeName || p.id || '').trim().toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, p);
+      }
+    });
+    return Array.from(map.values());
+  }, [userPlaces]);
+
   // Filtered saved places based on search query & category
   const filteredPlaces = useMemo(() => {
-    return userPlaces.filter((p) => {
+    return deduplicatedPlaces.filter((p) => {
       const matchesSearch =
         !searchQuery.trim() ||
         p.placeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -597,7 +616,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
 
       return matchesSearch && matchesCat;
     });
-  }, [userPlaces, searchQuery, selectedCategory]);
+  }, [deduplicatedPlaces, searchQuery, selectedCategory]);
 
   // Filtered reflections with locations
   const filteredMappedEntries = useMemo(() => {
@@ -679,11 +698,17 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
   // Submit new place
   const handleSaveNewPlace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    const trimmedName = formName.trim();
+    if (!trimmedName) return;
+
+    // Check if place already exists
+    const existingPlace = userPlaces.find(
+      (p) => p.placeName.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
 
     const newPlace: LocationTag = {
-      id: `place-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      placeName: formName.trim(),
+      id: existingPlace?.id || `place-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      placeName: trimmedName,
       category: formCategory,
       precision: formPrecision,
       formattedAddress: formAddress.trim() || undefined,
@@ -697,7 +722,18 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
       await saveUserPlace(user.uid, newPlace);
     }
 
-    setUserPlaces((prev) => [newPlace, ...prev]);
+    setUserPlaces((prev) => {
+      const map = new Map<string, LocationTag>();
+      map.set(newPlace.placeName.trim().toLowerCase(), newPlace);
+      prev.forEach((p) => {
+        const key = (p.placeName || p.id || '').trim().toLowerCase();
+        if (key && !map.has(key)) {
+          map.set(key, p);
+        }
+      });
+      return Array.from(map.values());
+    });
+
     setSelectedPlace(newPlace);
     setIsAddingPlace(false);
     
@@ -714,8 +750,11 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
     if (user?.uid && place.id && !place.id.startsWith('preset-')) {
       await deleteUserPlace(user.uid, place.id);
     }
-    setUserPlaces((prev) => prev.filter((p) => p.placeName !== place.placeName));
-    if (selectedPlace?.placeName === place.placeName) {
+    const targetKey = (place.placeName || '').trim().toLowerCase();
+    setUserPlaces((prev) =>
+      prev.filter((p) => (p.placeName || '').trim().toLowerCase() !== targetKey)
+    );
+    if ((selectedPlace?.placeName || '').trim().toLowerCase() === targetKey) {
       setSelectedPlace(null);
     }
     setDeleteConfirmPlace(null);
@@ -727,8 +766,8 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
       className="flex-1 flex flex-col w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors pb-28 sm:pb-12"
     >
       {/* Top Header Banner */}
-      <header className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shrink-0">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <header className="p-3 sm:p-6 px-2 sm:px-4 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shrink-0">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs shrink-0">
               <Compass className="w-5 h-5" />
@@ -754,9 +793,9 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
           </div>
 
           {/* Contextual Active Reflection Badge & Primary Actions */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             {activeEntry && (
-              <div className="flex items-center gap-2 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 px-3 py-1.5 rounded-xl text-xs">
+              <div className="flex items-center gap-2 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs">
                 <span className="text-slate-500 dark:text-slate-400">Current reflection:</span>
                 <span className="font-bold text-indigo-700 dark:text-indigo-300 max-w-[140px] truncate">
                   {activeEntry.title || 'Untitled Reflection'}
@@ -790,7 +829,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
                 id="start-reflection-here-top-btn"
                 type="button"
                 onClick={() => onNewReflectionAtPlace(selectedPlace)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs shadow-sm transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs shadow-sm transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Start a reflection here</span>
@@ -801,7 +840,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
               id="add-new-place-btn"
               type="button"
               onClick={() => setIsAddingPlace(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add a Place</span>
@@ -813,7 +852,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
       {/* Privacy Notice Banner */}
       <div 
         id="places-privacy-notice"
-        className="bg-slate-100/80 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800 px-4 py-2"
+        className="bg-slate-100/80 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-4 py-2"
       >
         <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-sans">
           <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
@@ -825,7 +864,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
 
       {/* Success Notification Banner */}
       {tagSuccessMessage && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/70 border-b border-emerald-200 dark:border-emerald-800/80 px-4 py-2 text-center text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-2">
+        <div className="bg-emerald-50 dark:bg-emerald-950/70 border-b border-emerald-200 dark:border-emerald-800/80 px-2 sm:px-4 py-2 text-center text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-2">
           <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           <span>{tagSuccessMessage}</span>
           <button
@@ -839,7 +878,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
       )}
 
       {/* Mobile View Switcher (List-First Architecture) */}
-      <div className="lg:hidden max-w-7xl mx-auto w-full px-4 pt-4">
+      <div className="lg:hidden max-w-7xl mx-auto w-full px-2 sm:px-4 pt-3 sm:pt-4">
         <div className="flex bg-slate-200/80 dark:bg-slate-900 p-1 rounded-xl border border-slate-300 dark:border-slate-800">
           <button
             type="button"
@@ -869,7 +908,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
       </div>
 
       {/* Main Responsive Split Content Layout */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col lg:flex-row gap-6">
+      <div className="max-w-7xl mx-auto w-full px-2 sm:px-4 lg:px-8 py-4 sm:py-6 flex-1 flex flex-col lg:flex-row gap-4 sm:gap-6">
         
         {/* Left Column: Places List Directory (List-First UX) */}
         <div 
@@ -935,7 +974,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
 
             {/* Category Filter Chips for Saved Places */}
             {activeTab === 'saved' && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+              <div className="flex flex-wrap items-center gap-1.5 pb-1 text-xs">
                 {[
                   { id: 'all', label: 'All' },
                   { id: 'home', label: 'Home' },
