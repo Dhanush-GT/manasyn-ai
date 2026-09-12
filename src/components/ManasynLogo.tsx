@@ -15,7 +15,7 @@ export const ManasynLogo: React.FC<ManasynLogoProps> = ({
   isDecorative,
   className = '',
 }) => {
-  const shouldShowWordmark = variant === 'icon' ? false : showWordmark;
+  const shouldShowWordmark = (variant === 'icon' || variant === 'symbol' || !showWordmark) ? false : true;
 
   return (
     <div className={`flex items-center gap-2.5 ${className}`} aria-hidden={isDecorative ? 'true' : undefined}>

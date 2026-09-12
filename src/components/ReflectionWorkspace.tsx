@@ -738,7 +738,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                     ) : (
                       <>
                         <div className="w-6 h-6 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
-                          <ManasynLogo size={16} variant="symbol" />
+                          <ManasynLogo size={16} variant="icon" showWordmark={false} />
                         </div>
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-300 font-sans">
                           Manasyn
