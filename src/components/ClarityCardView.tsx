@@ -39,16 +39,16 @@ export const ClarityCardView: React.FC<ClarityCardViewProps> = ({
       className="mt-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 shadow-md p-4 sm:p-5 space-y-4 text-left transition-all w-full max-w-full box-border overflow-hidden"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5 w-full min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2.5 w-full min-w-0">
+        <div className="flex items-center gap-2 min-w-0 shrink-0 whitespace-nowrap">
           <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/70 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
             <Sparkles className="w-3.5 h-3.5" />
           </div>
-          <span className="text-xs font-bold text-[#17182B] dark:text-slate-200 tracking-wide font-display uppercase truncate">
+          <span className="text-xs font-bold text-[#17182B] dark:text-slate-200 tracking-wide font-display uppercase shrink-0 whitespace-nowrap">
             Clarity Card
           </span>
         </div>
-        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium shrink-0 ml-2">
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium shrink-0 whitespace-nowrap">
           Suggested from your reflection
         </span>
       </div>

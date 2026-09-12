@@ -701,8 +701,8 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
       </div>
 
       {/* Chat / Multi-Turn Reflection Messages Stream */}
-      <div id="messages-container" className="flex-1 overflow-y-auto pb-64 md:pb-48 p-4 sm:p-6 scroll-smooth">
-        <div className="max-w-3xl mx-auto w-full space-y-6">
+      <div id="messages-container" className="flex-1 overflow-y-auto pb-64 md:pb-48 p-3 sm:p-6 scroll-smooth w-full">
+        <div className="w-full max-w-3xl mx-auto space-y-6">
           {entry.messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12">
               <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-md">
@@ -722,19 +722,36 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                 <div
                   key={msg.id || index}
                   id={`message-bubble-${index}`}
-                  className={`flex gap-3 sm:gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
+                  className={`w-full flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                 >
-                  {!isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-0.5 z-10 focus:outline-none select-none">
-                      <ManasynLogo size={20} variant="symbol" />
-                    </div>
-                  )}
+                  {/* Header Row above bubble in standard document flow */}
+                  <div className={`flex items-center gap-2 mb-1.5 px-1 select-none ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {isUser ? (
+                      <>
+                        <div className="w-6 h-6 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center shrink-0 shadow-xs">
+                          <UserIcon className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 font-sans">
+                          You
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-6 h-6 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
+                          <ManasynLogo size={16} variant="symbol" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 font-sans">
+                          Manasyn
+                        </span>
+                      </>
+                    )}
+                  </div>
 
                   <div
-                    className={`max-w-[85%] md:max-w-3xl rounded-2xl p-4 text-xs sm:text-sm leading-relaxed shadow-xs min-w-0 break-words ${
+                    className={`w-full max-w-full md:max-w-3xl rounded-2xl p-4 text-xs sm:text-sm leading-relaxed shadow-xs min-w-0 break-words ${
                       isUser
-                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-br-xs'
-                        : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-bl-xs border border-slate-200 dark:border-slate-800'
+                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-tr-xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-tl-xs border border-slate-200 dark:border-slate-800'
                     }`}
                   >
                     {!isUser && msg.mode && (
@@ -769,23 +786,22 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
                       })}
                     </span>
                   </div>
-
-                  {isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center shrink-0 shadow-xs mt-0.5 z-10 focus:outline-none select-none">
-                      <UserIcon className="w-4 h-4" />
-                    </div>
-                  )}
                 </div>
               );
             })
           )}
 
           {isAiLoading && (
-            <div id="ai-loading-indicator" className="flex flex-row items-start gap-3 sm:gap-4 justify-start animate-in fade-in">
-              <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs mt-0.5 z-10 focus:outline-none select-none">
-                <Cpu className="w-4 h-4 animate-spin text-indigo-500 dark:text-indigo-400" />
+            <div id="ai-loading-indicator" className="w-full flex flex-col items-start animate-in fade-in">
+              <div className="flex items-center gap-2 mb-1.5 px-1 select-none">
+                <div className="w-6 h-6 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
+                  <Cpu className="w-3.5 h-3.5 animate-spin text-indigo-500 dark:text-indigo-400" />
+                </div>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 font-sans">
+                  Manasyn
+                </span>
               </div>
-              <div className="max-w-[85%] md:max-w-3xl rounded-2xl rounded-bl-xs p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2 font-sans shadow-xs min-w-0">
+              <div className="w-full max-w-full md:max-w-3xl rounded-2xl rounded-tl-xs p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2 font-sans shadow-xs min-w-0">
                 <Sparkles className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-pulse shrink-0" />
                 <span>Reflecting and structuring your thoughts...</span>
               </div>
@@ -807,9 +823,9 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
 
       {/* Mode Selector and Prompt Input Bar - Fixed to bottom viewport directly above Bottom Navbar */}
       <div className="fixed bottom-20 lg:bottom-0 left-0 lg:left-64 right-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-3 pt-2 shadow-lg">
-        <div className="max-w-3xl mx-auto w-full px-3 sm:px-6">
+        <div className="max-w-3xl mx-auto w-full px-0 sm:px-6">
           {/* Reflection Conversational Intent Chips - Swipeable Horizontal Row with mobile overflow safety */}
-          <div className="flex flex-row items-center overflow-x-auto touch-pan-x scrollbar-hide w-full gap-2 px-1 sm:px-0 pr-8 mb-2 max-w-full select-none">
+          <div className="flex flex-row items-center overflow-x-auto justify-start px-4 scroll-smooth no-scrollbar scrollbar-hide w-full gap-2 mb-2 max-w-full select-none touch-pan-x">
             <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 min-w-max self-center mr-0.5 select-none">
               Intent:
             </span>
@@ -843,125 +859,127 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
             })}
           </div>
 
-          {/* New Suggestion UI: Placed directly above the chat input container */}
-          <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5 px-1 font-sans gap-y-1">
-            <div className="flex-1 mr-2 flex flex-wrap items-center gap-1.5 min-w-0">
-              <span className="text-slate-400 dark:text-slate-500 shrink-0 text-xs font-medium">Need a starting point?</span>
-              <span className="text-slate-700 dark:text-slate-300 font-medium text-xs break-words whitespace-normal select-text">
-                &ldquo;{currentSuggestion}&rdquo;
-              </span>
-            </div>
-            <button
-              type="button"
-              id="cycle-suggestion-btn"
-              onClick={handleNextSuggestion}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline font-semibold shrink-0 cursor-pointer flex items-center gap-0.5"
-            >
-              <span>• Another idea</span>
-            </button>
-          </div>
-
-          {/* Input Text Form */}
-          {speechError && (
-            <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 flex items-center justify-between font-sans">
-              <span>{speechError}</span>
-              <button
-                type="button"
-                onClick={() => setSpeechError(null)}
-                className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline ml-2"
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-
-          {isListening && (
-            <div className="mb-2 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between animate-pulse font-sans">
-              <div className="flex items-center gap-2">
-                <Radio className="w-3.5 h-3.5 text-rose-500 animate-spin" />
-                <span className="font-semibold">Transcribing speech... speak freely</span>
+          <div className="px-3 sm:px-0">
+            {/* New Suggestion UI: Placed directly above the chat input container */}
+            <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5 px-1 font-sans gap-y-1">
+              <div className="flex-1 mr-2 flex flex-wrap items-center gap-1.5 min-w-0">
+                <span className="text-slate-400 dark:text-slate-500 shrink-0 text-xs font-medium">Need a starting point?</span>
+                <span className="text-slate-700 dark:text-slate-300 font-medium text-xs break-words whitespace-normal select-text">
+                  &ldquo;{currentSuggestion}&rdquo;
+                </span>
               </div>
               <button
                 type="button"
-                onClick={toggleListening}
-                className="text-[11px] bg-rose-600 text-white px-2 py-0.5 rounded-md font-bold hover:bg-rose-700 transition-colors"
+                id="cycle-suggestion-btn"
+                onClick={handleNextSuggestion}
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline font-semibold shrink-0 cursor-pointer flex items-center gap-0.5"
               >
-                Stop Transcribing
+                <span>• Another idea</span>
               </button>
             </div>
-          )}
 
-          <form onSubmit={handleSendMessage} className="relative flex items-end gap-2">
-            <div className="relative flex-1">
-              <textarea
-                id="reflection-chat-input"
-                ref={textareaRef}
-                rows={2}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder="Talk or write freely..."
-                className={`w-full resize-none rounded-xl p-2.5 sm:p-3 pr-20 text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border ${
-                  isListening 
-                    ? 'border-rose-500 ring-2 ring-rose-500/30' 
-                    : 'border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
-                } text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none max-h-32 font-sans`}
-              />
-
-              {/* Action Buttons inside textarea: Location Tag and Voice Dictation */}
-              <div className="absolute right-2.5 bottom-2.5 flex items-center gap-1">
-                {/* Subtle Location Tag Button */}
+            {/* Input Text Form */}
+            {speechError && (
+              <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 flex items-center justify-between font-sans">
+                <span>{speechError}</span>
                 <button
-                  id="input-location-tag-btn"
                   type="button"
-                  onClick={() => onOpenLocations?.(entry.id)}
-                  title={entry.location ? `Tagged location: ${entry.location.placeName}` : "Tag location"}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    entry.location
-                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60'
-                      : 'text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-                  }`}
+                  onClick={() => setSpeechError(null)}
+                  className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline ml-2"
                 >
-                  <MapPin className="w-4 h-4" />
+                  Dismiss
                 </button>
+              </div>
+            )}
 
-                {/* Voice Dictation Toggle Button */}
+            {isListening && (
+              <div className="mb-2 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between animate-pulse font-sans">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-3.5 h-3.5 text-rose-500 animate-spin" />
+                  <span className="font-semibold">Transcribing speech... speak freely</span>
+                </div>
                 <button
-                  id="voice-dictation-btn"
                   type="button"
                   onClick={toggleListening}
-                  title={isListening ? "Stop Voice Dictation" : isSpeechSupported ? "Start Voice Dictation" : "Voice dictation not supported in browser"}
-                  disabled={!isSpeechSupported}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    isListening
-                      ? 'bg-rose-600 text-white animate-bounce shadow-md'
-                      : 'text-slate-400 hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-                  } ${!isSpeechSupported ? 'opacity-30 cursor-not-allowed' : ''}`}
+                  className="text-[11px] bg-rose-600 text-white px-2 py-0.5 rounded-md font-bold hover:bg-rose-700 transition-colors"
                 >
-                  {isListening ? (
-                    <MicOff className="w-4 h-4" />
-                  ) : (
-                    <Mic className="w-4 h-4" />
-                  )}
+                  Stop Transcribing
                 </button>
               </div>
-            </div>
+            )}
 
-            <button
-              id="reflection-send-btn"
-              type="submit"
-              disabled={!inputText.trim() || isAiLoading}
-              className="p-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40 disabled:hover:from-indigo-600 disabled:hover:to-violet-600 text-white shadow-md shadow-indigo-950/40 transition-all shrink-0 flex items-center justify-center h-[46px] w-[46px] active:scale-95"
-              title="Send reflection"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+            <form onSubmit={handleSendMessage} className="relative flex items-end gap-2">
+              <div className="relative flex-1">
+                <textarea
+                  id="reflection-chat-input"
+                  ref={textareaRef}
+                  rows={2}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Talk or write freely..."
+                  className={`w-full resize-none rounded-xl p-2.5 sm:p-3 pr-20 text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border ${
+                    isListening 
+                      ? 'border-rose-500 ring-2 ring-rose-500/30' 
+                      : 'border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+                  } text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none max-h-32 font-sans`}
+                />
+
+                {/* Action Buttons inside textarea: Location Tag and Voice Dictation */}
+                <div className="absolute right-2.5 bottom-2.5 flex items-center gap-1">
+                  {/* Subtle Location Tag Button */}
+                  <button
+                    id="input-location-tag-btn"
+                    type="button"
+                    onClick={() => onOpenLocations?.(entry.id)}
+                    title={entry.location ? `Tagged location: ${entry.location.placeName}` : "Tag location"}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      entry.location
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60'
+                        : 'text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4" />
+                  </button>
+
+                  {/* Voice Dictation Toggle Button */}
+                  <button
+                    id="voice-dictation-btn"
+                    type="button"
+                    onClick={toggleListening}
+                    title={isListening ? "Stop Voice Dictation" : isSpeechSupported ? "Start Voice Dictation" : "Voice dictation not supported in browser"}
+                    disabled={!isSpeechSupported}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      isListening
+                        ? 'bg-rose-600 text-white animate-bounce shadow-md'
+                        : 'text-slate-400 hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                    } ${!isSpeechSupported ? 'opacity-30 cursor-not-allowed' : ''}`}
+                  >
+                    {isListening ? (
+                      <MicOff className="w-4 h-4" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                id="reflection-send-btn"
+                type="submit"
+                disabled={!inputText.trim() || isAiLoading}
+                className="p-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40 disabled:hover:from-indigo-600 disabled:hover:to-violet-600 text-white shadow-md shadow-indigo-950/40 transition-all shrink-0 flex items-center justify-center h-[46px] w-[46px] active:scale-95"
+                title="Send reflection"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 
