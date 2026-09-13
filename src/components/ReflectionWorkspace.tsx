@@ -115,7 +115,10 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
-  const finalSpeechTextRef = useRef('');
+  const baseInputTextRef = useRef('');
+  const latestInputTextRef = useRef('');
+  const isListeningRef = useRef(false);
+  const isExplicitlyStoppedRef = useRef(false);
 
   const handleNextSuggestion = () => {
     const list = INTENT_SUGGESTIONS[mode] || INTENT_SUGGESTIONS.clear_mind;
@@ -143,7 +146,10 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   }, []);
 
   const toggleListening = () => {
-    if (isListening) {
+    if (isListeningRef.current) {
+      isExplicitlyStoppedRef.current = true;
+      isListeningRef.current = false;
+      setIsListening(false);
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -151,7 +157,6 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
           // Ignore if already stopped
         }
       }
-      setIsListening(false);
       return;
     }
 
@@ -166,44 +171,55 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
 
     try {
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = navigator.language || 'en-US';
 
+      isExplicitlyStoppedRef.current = false;
+      isListeningRef.current = true;
+      setIsListening(true);
+      setSpeechError(null);
+      baseInputTextRef.current = inputText.trim();
+      latestInputTextRef.current = inputText.trim();
+
       recognition.onstart = () => {
         setIsListening(true);
+        isListeningRef.current = true;
         setSpeechError(null);
-        finalSpeechTextRef.current = inputText.trim() ? `${inputText.trim()} ` : '';
       };
 
       recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let newFinalTranscript = '';
+        let sessionFinal = '';
+        let sessionInterim = '';
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcriptSegment = event.results[i][0].transcript;
+        // Loop through ALL results from 0 to the end, every single time.
+        for (let i = 0; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            newFinalTranscript += transcriptSegment + ' ';
+            sessionFinal += transcript + ' ';
           } else {
-            interimTranscript += transcriptSegment;
+            sessionInterim += transcript;
           }
         }
 
-        if (newFinalTranscript) {
-          finalSpeechTextRef.current += newFinalTranscript;
-        }
+        // Combine the pre-mic snapshot with the completely rebuilt session state
+        const base = baseInputTextRef.current ? baseInputTextRef.current.trim() + ' ' : '';
+        const fullText = `${base}${sessionFinal}${sessionInterim}`.trimStart();
 
-        const combined = `${finalSpeechTextRef.current}${interimTranscript}`.trimStart();
-        setInputText(combined);
+        latestInputTextRef.current = fullText;
+        setInputText(fullText);
       };
 
       recognition.onerror = (event: any) => {
         const errType = event?.error;
-        // Expected non-fatal events when speech stops or user stays silent:
+        // Expected non-fatal events when speech pauses or user stays silent:
         if (errType === 'aborted' || errType === 'no-speech') {
-          setIsListening(false);
           return;
         }
+
+        isExplicitlyStoppedRef.current = true;
+        isListeningRef.current = false;
+        setIsListening(false);
 
         if (errType === 'not-allowed' || errType === 'service-not-allowed') {
           setSpeechError('Microphone access denied. Please allow microphone permissions in your browser settings.');
@@ -214,11 +230,23 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
         } else {
           setSpeechError(`Voice input issue: ${errType || 'Unable to process speech'}`);
         }
-        setIsListening(false);
       };
 
       recognition.onend = () => {
-        setIsListening(false);
+        // If not explicitly stopped by user (e.g. natural pause for breath), seamlessly restart
+        if (!isExplicitlyStoppedRef.current && isListeningRef.current) {
+          try {
+            baseInputTextRef.current = latestInputTextRef.current.trim();
+            recognition.start();
+            return;
+          } catch {
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+        } else {
+          isListeningRef.current = false;
+          setIsListening(false);
+        }
       };
 
       recognitionRef.current = recognition;
@@ -226,6 +254,7 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
     } catch (err: unknown) {
       console.warn('Failed to initialize speech recognition:', err);
       setSpeechError('Failed to start microphone.');
+      isListeningRef.current = false;
       setIsListening(false);
     }
   };
@@ -233,6 +262,8 @@ export const ReflectionWorkspace: React.FC<ReflectionWorkspaceProps> = ({
   // Cleanup speech on unmount or entry change
   useEffect(() => {
     return () => {
+      isExplicitlyStoppedRef.current = true;
+      isListeningRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();

@@ -245,7 +245,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-xl sm:text-2xl font-bold font-display text-indigo-600 dark:text-indigo-400">
-                  {Math.max(1, Math.floor(validEntries.length * 1.5))}
+                  {validEntries.length === 0 ? 0 : Math.max(1, Math.floor(validEntries.length * 1.2))}
                 </span>
                 <span className="text-[10px] text-slate-500">themes</span>
               </div>

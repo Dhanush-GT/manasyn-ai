@@ -51,70 +51,6 @@ interface LocationsViewProps {
   user?: UserProfile;
 }
 
-// Curated default places tailored for calm reflection
-export const DEFAULT_PRESET_PLACES: LocationTag[] = [
-  {
-    id: 'preset-home-writing',
-    placeName: 'Home Writing Corner',
-    formattedAddress: 'San Francisco, CA',
-    latitude: 37.7749,
-    longitude: -122.4194,
-    category: 'home',
-    precision: 'approximate',
-    notes: 'Morning desk with natural light by the window',
-  },
-  {
-    id: 'preset-riverside-walk',
-    placeName: 'Riverside Walking Path',
-    formattedAddress: 'Golden Gate Park, San Francisco, CA',
-    latitude: 37.7694,
-    longitude: -122.4862,
-    category: 'nature',
-    precision: 'neighborhood',
-    notes: 'Quiet path under the trees for walking reflections',
-  },
-  {
-    id: 'preset-library',
-    placeName: 'University Library',
-    formattedAddress: 'Campus Quiet Floor, San Francisco, CA',
-    latitude: 37.7885,
-    longitude: -122.4072,
-    category: 'study',
-    precision: 'exact',
-    notes: 'Dedicated study area for deep focus',
-  },
-  {
-    id: 'preset-quiet-cafe',
-    placeName: 'Quiet Café',
-    formattedAddress: 'SOMA Neighborhood, San Francisco, CA',
-    latitude: 37.7909,
-    longitude: -122.4013,
-    category: 'cafe',
-    precision: 'approximate',
-    notes: 'Cozy corner table with ambient warmth',
-  },
-  {
-    id: 'preset-garden',
-    placeName: 'Community Garden',
-    formattedAddress: 'Mission District, San Francisco, CA',
-    latitude: 37.7550,
-    longitude: -122.4200,
-    category: 'nature',
-    precision: 'neighborhood',
-    notes: 'Open greenspace surrounded by flowers and herbs',
-  },
-  {
-    id: 'preset-weekend-retreat',
-    placeName: 'Weekend Retreat',
-    formattedAddress: 'Lake Tahoe, CA',
-    latitude: 39.0968,
-    longitude: -120.0324,
-    category: 'travel',
-    precision: 'approximate',
-    notes: 'Peaceful cabin surrounded by pines for reset weekends',
-  }
-];
-
 // Helper to get category icon
 export const getCategoryIcon = (category?: string, name?: string) => {
   const cat = (category || '').toLowerCase();
@@ -501,11 +437,11 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
 
   // Selected Place
   const [selectedPlace, setSelectedPlace] = useState<LocationTag | null>(
-    activeEntry?.location || DEFAULT_PRESET_PLACES[0]
+    activeEntry?.location || null
   );
 
-  // User saved places state (with Firestore real-time sync + fallback)
-  const [userPlaces, setUserPlaces] = useState<LocationTag[]>(DEFAULT_PRESET_PLACES);
+  // User saved places state (with Firestore real-time sync)
+  const [userPlaces, setUserPlaces] = useState<LocationTag[]>([]);
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [deleteConfirmPlace, setDeleteConfirmPlace] = useState<LocationTag | null>(null);
   const [tagSuccessMessage, setTagSuccessMessage] = useState<string | null>(null);
@@ -529,28 +465,10 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
     const unsubscribe = subscribeUserPlaces(
       user.uid,
       (remotePlaces) => {
-        const placeMap = new Map<string, LocationTag>();
-        (remotePlaces || []).forEach((p) => {
-          const nameKey = (p.placeName || '').trim().toLowerCase();
-          const idKey = (p.id || '').trim().toLowerCase();
-          if (nameKey) {
-            placeMap.set(nameKey, p);
-          } else if (idKey) {
-            placeMap.set(idKey, p);
-          }
-        });
-
-        DEFAULT_PRESET_PLACES.forEach((preset) => {
-          const key = preset.placeName.trim().toLowerCase();
-          if (!placeMap.has(key)) {
-            placeMap.set(key, preset);
-          }
-        });
-
-        setUserPlaces(Array.from(placeMap.values()));
+        setUserPlaces(remotePlaces || []);
       },
       (err) => {
-        console.warn('[Places] Falling back to default preset places:', err);
+        console.warn('[Places] Error syncing user places:', err);
       }
     );
 
@@ -1417,7 +1335,7 @@ export const LocationsView: React.FC<LocationsViewProps> = ({
                   type="text"
                   value={formAddress}
                   onChange={(e) => setFormAddress(e.target.value)}
-                  placeholder="e.g. San Francisco, CA or Lake Tahoe"
+                  placeholder="e.g. City Library, Quiet Cafe, or Home Workspace"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
                 />
                 {geolocationError && (

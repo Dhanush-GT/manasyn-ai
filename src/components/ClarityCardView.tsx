@@ -136,7 +136,7 @@ export const ClarityCardView: React.FC<ClarityCardViewProps> = ({
             </div>
 
             {/* Static Action Buttons Bar (never floats or occludes text) */}
-            <div className="w-full sm:w-auto flex items-center justify-end gap-2 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
+            <div className="w-full sm:w-auto flex flex-wrap items-center justify-start sm:justify-end gap-2 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
               {commitmentConfirmed ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0 whitespace-nowrap">
                   <Check className="w-3.5 h-3.5" />
